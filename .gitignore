@@ -1,0 +1,25 @@
+# Rust build artifacts
+target/
+**/*.rs.bk
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.vercel/
+frontend/.env.local
+frontend/.env.*.local
+
+# Stellar CLI keys (never commit private keys)
+.stellar/
+*.stellar-key
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Misc
+*.log
+*.tmp
