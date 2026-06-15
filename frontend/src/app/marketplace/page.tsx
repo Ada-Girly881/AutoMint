@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingBag, RefreshCw, Filter, Bot } from 'lucide-react';
+import { ShoppingBag, RefreshCw, Filter, Bot, Loader2 } from 'lucide-react';
 import { useWallet } from '@/hooks/useWallet';
 import { useMarketplace } from '@/hooks/useMarketplace';
 import { useAccrual } from '@/hooks/useAccrual';
@@ -16,7 +16,7 @@ type Tab = 'browse' | 'my-bots' | 'my-listings';
 
 export default function MarketplacePage() {
   const { isConnected, publicKey } = useWallet();
-  const { listings, myListings, loadingListings, isBuying, isCancelling, buyBot, cancelListing, listBot, isListing, refetch } =
+  const { listings, myListings, loadingListings, isBuying, isCancelling, isMintingTier, buyBot, cancelListing, listBot, mintTierBot, isListing, refetch } =
     useMarketplace(publicKey);
   const { bots } = useAccrual(publicKey);
 
@@ -227,11 +227,12 @@ export default function MarketplacePage() {
                   {meta.priceXlm.toLocaleString()} XLM
                 </div>
                 <button
-                  disabled={!isConnected}
-                  className="w-full py-2 rounded-xl text-xs font-bold transition-all"
-                  style={{ background: `${meta.color}18`, color: meta.color, border: `1px solid ${meta.color}35`, cursor: 'pointer' }}
+                  disabled={!isConnected || isMintingTier}
+                  onClick={() => isConnected && mintTierBot(meta.index)}
+                  className="w-full py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                  style={{ background: `${meta.color}18`, color: meta.color, border: `1px solid ${meta.color}35`, cursor: isConnected ? 'pointer' : 'not-allowed', opacity: !isConnected ? 0.5 : 1 }}
                 >
-                  {isConnected ? 'Buy Now' : 'Connect Wallet'}
+                  {isMintingTier ? <><Loader2 className="w-3 h-3 animate-spin" /> Minting…</> : isConnected ? 'Buy Now' : 'Connect Wallet'}
                 </button>
               </motion.div>
             ))}

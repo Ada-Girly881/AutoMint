@@ -315,18 +315,25 @@ function parseUserProfile(raw: Record<string, unknown>): UserProfile {
 }
 
 function parseBotNFT(raw: Record<string, unknown>): BotNFT {
-  const tierVal = raw.tier as { [k: string]: unknown } | number;
-  const tierIndex = typeof tierVal === 'number'
-    ? tierVal
-    : typeof tierVal === 'object'
-    ? Object.keys(tierVal)[0] === 'Basic' ? 0 : Object.keys(tierVal)[0] === 'Bronze' ? 1 : Object.keys(tierVal)[0] === 'Silver' ? 2 : Object.keys(tierVal)[0] === 'Gold' ? 3 : 4
-    : 0;
+  // scValToNative can return the tier enum as a string, array, or object depending on SDK version
+  const TIER_MAP: Record<string, number> = { Basic: 0, Bronze: 1, Silver: 2, Gold: 3, Diamond: 4 };
+  const tierVal = raw.tier;
+  let tierIndex = 0;
+  if (typeof tierVal === 'string') {
+    tierIndex = TIER_MAP[tierVal] ?? 0;
+  } else if (typeof tierVal === 'number') {
+    tierIndex = tierVal;
+  } else if (Array.isArray(tierVal) && typeof tierVal[0] === 'string') {
+    tierIndex = TIER_MAP[tierVal[0]] ?? 0;
+  } else if (tierVal && typeof tierVal === 'object') {
+    tierIndex = TIER_MAP[Object.keys(tierVal as object)[0]] ?? 0;
+  }
   return {
-    id: BigInt(raw.id as number ?? 0),
+    id: BigInt((raw.id as bigint | number) ?? 0),
     tier: tierFromIndex(tierIndex),
     owner: String(raw.owner ?? ''),
-    accrualRate: BigInt(raw.accrual_rate as number ?? 0),
-    mintedAt: BigInt(raw.minted_at as number ?? 0),
+    accrualRate: BigInt((raw.accrual_rate as bigint | number) ?? 0),
+    mintedAt: BigInt((raw.minted_at as bigint | number) ?? 0),
     name: String(raw.name ?? ''),
   };
 }

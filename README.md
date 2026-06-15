@@ -5,7 +5,7 @@ Deploy NFT bots that accrue `$AMT` tokens 24/7. No tapping. Trade bots on a P2P 
 
 ---
 
-**[Live App](https://automint.vercel.app)** &nbsp;|&nbsp; **[Demo Video](https://youtu.be/automint-demo)** &nbsp;|&nbsp; **[Stellar Expert](https://stellar.expert/explorer/testnet)**
+**[Live App](https://auto-mint-theta.vercel.app/)** &nbsp;|&nbsp; **[Demo Video](https://www.loom.com/share/ba6c8e7cd5eb49b0ad46b691d61fdc3b)** &nbsp;|&nbsp; **[Stellar Expert](https://stellar.expert/explorer/testnet)**
 
 ---
 

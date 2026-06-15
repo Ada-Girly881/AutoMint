@@ -83,9 +83,14 @@ export function useAccrual(publicKey: string | null): UseAccrualReturn {
 
   useEffect(() => {
     if (animFrame.current) clearInterval(animFrame.current);
-    if (!accrualState || !profile) return;
 
-    const basePoints = Number(profile.totalPoints);
+    const basePoints = Number(profile?.totalPoints ?? 0);
+
+    if (!accrualState) {
+      setDisplayedPoints(basePoints);
+      return;
+    }
+
     const lastClaimTs = Number(accrualState.lastClaimTs);
 
     animFrame.current = setInterval(() => {
@@ -133,9 +138,13 @@ export function useAccrual(publicKey: string | null): UseAccrualReturn {
     onSuccess: () => {
       toast.success('Welcome to AutoMint! Your Basic Bot is now earning.');
       qc.invalidateQueries({ queryKey: ['registered', publicKey] });
-      qc.invalidateQueries({ queryKey: ['profile', publicKey] });
-      qc.invalidateQueries({ queryKey: ['bots', publicKey] });
-      qc.invalidateQueries({ queryKey: ['accrualState', publicKey] });
+      // Small delay so the ledger state settles before re-querying
+      setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ['profile', publicKey] });
+        qc.invalidateQueries({ queryKey: ['bots', publicKey] });
+        qc.invalidateQueries({ queryKey: ['accrualState', publicKey] });
+        qc.invalidateQueries({ queryKey: ['amtBalance', publicKey] });
+      }, 3000);
     },
     onError: (err) => {
       toast.dismiss('register');

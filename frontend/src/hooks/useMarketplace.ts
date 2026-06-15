@@ -8,6 +8,7 @@ import {
   listBot,
   buyBot,
   cancelListing,
+  mintTierBot,
 } from '@/lib/contracts';
 import { POLL_INTERVAL_MS } from '@/lib/constants';
 import type { Listing } from '@/types';
@@ -66,6 +67,19 @@ export function useMarketplace(publicKey: string | null) {
     onError: (err) => toast.error(`Purchase failed: ${err instanceof Error ? err.message : 'Error'}`),
   });
 
+  const { mutateAsync: doMintTier, isPending: isMintingTier } = useMutation({
+    mutationFn: async (tierIndex: number) => {
+      if (!publicKey) throw new Error('Wallet not connected');
+      return mintTierBot(publicKey, tierIndex);
+    },
+    onSuccess: () => {
+      toast.success('Bot minted! Check your dashboard.');
+      qc.invalidateQueries({ queryKey: ['bots', publicKey] });
+      qc.invalidateQueries({ queryKey: ['accrualState', publicKey] });
+    },
+    onError: (err) => toast.error(`Mint failed: ${err instanceof Error ? err.message : 'Error'}`),
+  });
+
   const { mutateAsync: doCancel, isPending: isCancelling } = useMutation({
     mutationFn: async (listingId: bigint) => {
       if (!publicKey) throw new Error('Wallet not connected');
@@ -88,9 +102,11 @@ export function useMarketplace(publicKey: string | null) {
     isListing,
     isBuying,
     isCancelling,
+    isMintingTier,
     listBot: async (params: { botId: bigint; botTier: number; priceStroops: bigint; currencyAddress: string }) => { await doList(params); },
     buyBot: async (listingId: bigint) => { await doBuy(listingId); },
     cancelListing: async (listingId: bigint) => { await doCancel(listingId); },
+    mintTierBot: async (tierIndex: number) => { await doMintTier(tierIndex); },
     refetch: refetchListings,
   };
 }
