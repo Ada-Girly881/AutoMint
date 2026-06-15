@@ -20,6 +20,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# TypeScript build cache
+frontend/tsconfig.tsbuildinfo
+
 # Misc
 *.log
 *.tmp
