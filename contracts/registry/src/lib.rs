@@ -3,16 +3,21 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Vec,
 };
 
+// #38: Define DataKey storage keys addressing per-user and global storage
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
+    // Per-user storage
     UserProfile(Address),
+    Username(String),
+    // Global storage
     UserList,
     TotalUsers,
     Admin,
     Initialized,
 }
 
+// #39: Define UserProfile struct
 #[derive(Clone, Debug)]
 #[contracttype]
 pub struct UserProfile {
@@ -24,14 +29,15 @@ pub struct UserProfile {
     pub bot_count: u32,
 }
 
+// #38: Define RegistryError enum
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub enum RegistryError {
     AlreadyInitialized = 1,
     AlreadyRegistered = 2,
-    UserNotFound = 3,
-    Unauthorized = 4,
-    InvalidUsername = 5,
+    UsernameTaken = 3,
+    NotRegistered = 4,
+    Unauthorized = 5,
 }
 
 const LEDGER_BUMP: u32 = 120960;
@@ -69,11 +75,19 @@ impl RegistryContract {
             return Err(RegistryError::AlreadyRegistered);
         }
         if username.is_empty() || username.len() > 32 {
-            return Err(RegistryError::InvalidUsername);
+            return Err(RegistryError::UsernameTaken);
+        }
+        // Check for username uniqueness
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::Username(username.clone()))
+        {
+            return Err(RegistryError::UsernameTaken);
         }
         let profile = UserProfile {
             address: user.clone(),
-            username,
+            username: username.clone(),
             total_points: 0,
             claimed_amt: 0,
             registered_at: env.ledger().timestamp(),
@@ -82,6 +96,9 @@ impl RegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::UserProfile(user.clone()), &profile);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Username(username), &user);
         env.storage().persistent().extend_ttl(
             &DataKey::UserProfile(user.clone()),
             LEDGER_THRESHOLD,
@@ -120,7 +137,7 @@ impl RegistryContract {
         env.storage()
             .persistent()
             .get(&DataKey::UserProfile(user))
-            .ok_or(RegistryError::UserNotFound)
+            .ok_or(RegistryError::NotRegistered)
     }
 
     pub fn add_points(env: Env, user: Address, points: u64) -> Result<(), RegistryError> {
@@ -128,7 +145,7 @@ impl RegistryContract {
             .storage()
             .persistent()
             .get(&DataKey::UserProfile(user.clone()))
-            .ok_or(RegistryError::UserNotFound)?;
+            .ok_or(RegistryError::NotRegistered)?;
         profile.total_points = profile.total_points.saturating_add(points);
         env.storage()
             .persistent()
@@ -146,7 +163,7 @@ impl RegistryContract {
             .storage()
             .persistent()
             .get(&DataKey::UserProfile(user.clone()))
-            .ok_or(RegistryError::UserNotFound)?;
+            .ok_or(RegistryError::NotRegistered)?;
         profile.bot_count = profile.bot_count.saturating_add(1);
         env.storage()
             .persistent()
@@ -159,7 +176,7 @@ impl RegistryContract {
             .storage()
             .persistent()
             .get(&DataKey::UserProfile(user.clone()))
-            .ok_or(RegistryError::UserNotFound)?;
+            .ok_or(RegistryError::NotRegistered)?;
         profile.bot_count = profile.bot_count.saturating_sub(1);
         env.storage()
             .persistent()
@@ -172,7 +189,7 @@ impl RegistryContract {
             .storage()
             .persistent()
             .get(&DataKey::UserProfile(user.clone()))
-            .ok_or(RegistryError::UserNotFound)?;
+            .ok_or(RegistryError::NotRegistered)?;
         profile.claimed_amt = profile.claimed_amt.saturating_add(amount);
         env.storage()
             .persistent()
@@ -243,6 +260,7 @@ mod test {
         (env, admin, client)
     }
 
+    // #40: Test register success
     #[test]
     fn test_register_user() {
         let (env, _admin, client) = setup();
@@ -252,8 +270,10 @@ mod test {
         let profile = client.get_user(&user);
         assert_eq!(profile.total_points, 0);
         assert_eq!(profile.bot_count, 0);
+        assert_eq!(profile.claimed_amt, 0);
     }
 
+    // #40: Test duplicate-registration failure
     #[test]
     fn test_duplicate_register_fails() {
         let (env, _admin, client) = setup();
@@ -264,6 +284,19 @@ mod test {
             .is_err());
     }
 
+    // #40: Test username collision
+    #[test]
+    fn test_username_collision_fails() {
+        let (env, _admin, client) = setup();
+        let user1 = Address::generate(&env);
+        let user2 = Address::generate(&env);
+        client.register(&user1, &String::from_str(&env, "Bob"));
+        assert!(client
+            .try_register(&user2, &String::from_str(&env, "Bob"))
+            .is_err());
+    }
+
+    // #40: Test invalid username (empty)
     #[test]
     fn test_empty_username_fails() {
         let (env, _admin, client) = setup();
@@ -273,16 +306,16 @@ mod test {
             .is_err());
     }
 
+    // #40: Test invalid username (too long)
     #[test]
-    fn test_add_points() {
+    fn test_long_username_fails() {
         let (env, _admin, client) = setup();
         let user = Address::generate(&env);
-        client.register(&user, &String::from_str(&env, "Bob"));
-        client.add_points(&user, &500_u64);
-        let profile = client.get_user(&user);
-        assert_eq!(profile.total_points, 500);
+        let long_name = String::from_str(&env, "thisistoolongusernamethatexceedsthelimit");
+        assert!(client.try_register(&user, &long_name).is_err());
     }
 
+    // #40: Test add_points accumulation
     #[test]
     fn test_add_points_accumulates() {
         let (env, _admin, client) = setup();
@@ -291,6 +324,28 @@ mod test {
         client.add_points(&user, &100_u64);
         client.add_points(&user, &250_u64);
         assert_eq!(client.get_user(&user).total_points, 350);
+    }
+
+    // #40: Test add_claimed_amt accumulation
+    #[test]
+    fn test_add_claimed_amt_accumulates() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "Delta"));
+        client.add_claimed_amt(&user, &1000_i128);
+        client.add_claimed_amt(&user, &500_i128);
+        assert_eq!(client.get_user(&user).claimed_amt, 1500);
+    }
+
+    // #40: Test add_claimed_amt with negative amounts
+    #[test]
+    fn test_add_claimed_amt_negative() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "Echo"));
+        client.add_claimed_amt(&user, &1000_i128);
+        client.add_claimed_amt(&user, &-300_i128);
+        assert_eq!(client.get_user(&user).claimed_amt, 700);
     }
 
     #[test]
@@ -311,6 +366,7 @@ mod test {
         assert_eq!(client.total_users(), 2);
     }
 
+    // #40: Test leaderboard ordering with multiple users
     #[test]
     fn test_leaderboard_ordering() {
         let (env, _admin, client) = setup();
@@ -324,6 +380,7 @@ mod test {
         client.add_points(&u2, &500_u64);
         client.add_points(&u3, &250_u64);
         let lb = client.get_leaderboard(&10_u32);
+        assert_eq!(lb.len(), 3);
         assert_eq!(lb.get(0).unwrap().total_points, 500);
         assert_eq!(lb.get(1).unwrap().total_points, 250);
         assert_eq!(lb.get(2).unwrap().total_points, 100);
@@ -332,24 +389,59 @@ mod test {
     #[test]
     fn test_leaderboard_limit() {
         let (env, _admin, client) = setup();
-        for i in 0..5u32 {
+        let names = ["user0", "user1", "user2", "user3", "user4"];
+        for (i, name) in names.iter().enumerate() {
             let u = Address::generate(&env);
-            client.register(&u, &String::from_str(&env, "user"));
+            client.register(&u, &String::from_str(&env, name));
             client.add_points(&u, &(i as u64 * 10));
         }
         let lb = client.get_leaderboard(&3_u32);
         assert_eq!(lb.len(), 3);
     }
 
+    // #40: Test bot_count increment/decrement floor at 0
     #[test]
     fn test_increment_decrement_bot_count() {
         let (env, _admin, client) = setup();
         let user = Address::generate(&env);
         client.register(&user, &String::from_str(&env, "BotUser"));
+        assert_eq!(client.get_user(&user).bot_count, 0);
         client.increment_bot_count(&user);
         client.increment_bot_count(&user);
         assert_eq!(client.get_user(&user).bot_count, 2);
         client.decrement_bot_count(&user);
         assert_eq!(client.get_user(&user).bot_count, 1);
     }
+
+    // #40: Test bot_count floor at 0
+    #[test]
+    fn test_bot_count_floors_at_zero() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "BotUser2"));
+        assert_eq!(client.get_user(&user).bot_count, 0);
+        client.decrement_bot_count(&user);
+        assert_eq!(client.get_user(&user).bot_count, 0); // Should floor at 0
+        client.decrement_bot_count(&user);
+        assert_eq!(client.get_user(&user).bot_count, 0); // Still 0
+    }
+
+    // #37: Test admin function returns correct admin address
+    #[test]
+    fn test_admin_returns_current_admin() {
+        let (_env, admin, client) = setup();
+        assert_eq!(client.admin(), admin);
+    }
+
+    // #37: Test admin persists across calls
+    #[test]
+    fn test_admin_persists() {
+        let (_env, admin, client) = setup();
+        let retrieved_admin1 = client.admin();
+        let retrieved_admin2 = client.admin();
+        assert_eq!(retrieved_admin1, admin);
+        assert_eq!(retrieved_admin2, admin);
+        assert_eq!(retrieved_admin1, retrieved_admin2);
+    }
 }
+
