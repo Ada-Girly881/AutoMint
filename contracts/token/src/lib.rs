@@ -1,7 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, contracterror, symbol_short,
-    Address, Env, String,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String,
 };
 
 #[derive(Clone)]
@@ -67,10 +66,16 @@ impl AMTToken {
         if env.storage().instance().has(&DataKey::State) {
             return Err(TokenError::AlreadyInitialized);
         }
-        let state = TokenState { decimal, name, symbol };
+        let state = TokenState {
+            decimal,
+            name,
+            symbol,
+        };
         env.storage().instance().set(&DataKey::State, &state);
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         Ok(())
     }
 
@@ -95,8 +100,14 @@ impl AMTToken {
         if amount < 0 {
             return Err(TokenError::NegativeAmount);
         }
-        let key = DataKey::Allowance(AllowanceKey { from: from.clone(), spender: spender.clone() });
-        let value = AllowanceValue { amount, expiration_ledger };
+        let key = DataKey::Allowance(AllowanceKey {
+            from: from.clone(),
+            spender: spender.clone(),
+        });
+        let value = AllowanceValue {
+            amount,
+            expiration_ledger,
+        };
         env.storage().temporary().set(&key, &value);
         let current = env.ledger().sequence();
         if expiration_ledger > current {
@@ -157,10 +168,14 @@ impl AMTToken {
         }
         let balance = Self::balance(env.clone(), to.clone());
         let new_balance = balance.checked_add(amount).ok_or(TokenError::Overflow)?;
-        env.storage().persistent().set(&DataKey::Balance(to.clone()), &new_balance);
         env.storage()
             .persistent()
-            .extend_ttl(&DataKey::Balance(to.clone()), LEDGER_THRESHOLD, LEDGER_BUMP);
+            .set(&DataKey::Balance(to.clone()), &new_balance);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Balance(to.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
         env.events().publish((symbol_short!("mint"), to), amount);
         Ok(())
     }
@@ -168,12 +183,16 @@ impl AMTToken {
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), TokenError> {
         Self::require_admin(&env)?;
         env.storage().instance().set(&DataKey::Admin, &new_admin);
-        env.events().publish((symbol_short!("set_admin"),), new_admin);
+        env.events()
+            .publish((symbol_short!("set_admin"),), new_admin);
         Ok(())
     }
 
     pub fn admin(env: Env) -> Address {
-        env.storage().instance().get::<_, Address>(&DataKey::Admin).unwrap()
+        env.storage()
+            .instance()
+            .get::<_, Address>(&DataKey::Admin)
+            .unwrap()
     }
 
     pub fn decimals(env: Env) -> u32 {
@@ -201,7 +220,12 @@ impl AMTToken {
         Ok(())
     }
 
-    fn do_transfer(env: &Env, from: &Address, to: &Address, amount: i128) -> Result<(), TokenError> {
+    fn do_transfer(
+        env: &Env,
+        from: &Address,
+        to: &Address,
+        amount: i128,
+    ) -> Result<(), TokenError> {
         if amount < 0 {
             return Err(TokenError::NegativeAmount);
         }
@@ -219,11 +243,17 @@ impl AMTToken {
             .get::<_, i128>(&DataKey::Balance(to.clone()))
             .unwrap_or(0);
         let new_to = to_bal.checked_add(amount).ok_or(TokenError::Overflow)?;
-        env.storage().persistent().set(&DataKey::Balance(from.clone()), &(from_bal - amount));
-        env.storage().persistent().set(&DataKey::Balance(to.clone()), &new_to);
         env.storage()
             .persistent()
-            .extend_ttl(&DataKey::Balance(to.clone()), LEDGER_THRESHOLD, LEDGER_BUMP);
+            .set(&DataKey::Balance(from.clone()), &(from_bal - amount));
+        env.storage()
+            .persistent()
+            .set(&DataKey::Balance(to.clone()), &new_to);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Balance(to.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
         env.events().publish(
             (symbol_short!("transfer"), from.clone(), to.clone()),
             amount,
@@ -237,12 +267,18 @@ impl AMTToken {
         spender: &Address,
         amount: i128,
     ) -> Result<(), TokenError> {
-        let key = DataKey::Allowance(AllowanceKey { from: from.clone(), spender: spender.clone() });
+        let key = DataKey::Allowance(AllowanceKey {
+            from: from.clone(),
+            spender: spender.clone(),
+        });
         let a = env
             .storage()
             .temporary()
             .get::<_, AllowanceValue>(&key)
-            .unwrap_or(AllowanceValue { amount: 0, expiration_ledger: 0 });
+            .unwrap_or(AllowanceValue {
+                amount: 0,
+                expiration_ledger: 0,
+            });
         if a.expiration_ledger < env.ledger().sequence() {
             return Err(TokenError::AllowanceExpired);
         }
@@ -251,7 +287,10 @@ impl AMTToken {
         }
         env.storage().temporary().set(
             &key,
-            &AllowanceValue { amount: a.amount - amount, expiration_ledger: a.expiration_ledger },
+            &AllowanceValue {
+                amount: a.amount - amount,
+                expiration_ledger: a.expiration_ledger,
+            },
         );
         Ok(())
     }
@@ -281,8 +320,8 @@ mod test {
     fn test_mint_and_balance() {
         let (env, _admin, client) = setup();
         let user = Address::generate(&env);
-        client.mint(&user, &1_000_0000000_i128);
-        assert_eq!(client.balance(&user), 1_000_0000000_i128);
+        client.mint(&user, &10_000_000_000_i128);
+        assert_eq!(client.balance(&user), 10_000_000_000_i128);
     }
 
     #[test]
@@ -352,7 +391,12 @@ mod test {
         let spender = Address::generate(&env);
         let bob = Address::generate(&env);
         client.mint(&alice, &1000_i128);
-        client.approve(&alice, &spender, &300_i128, &(env.ledger().sequence() + 1000));
+        client.approve(
+            &alice,
+            &spender,
+            &300_i128,
+            &(env.ledger().sequence() + 1000),
+        );
         assert_eq!(client.allowance(&alice, &spender), 300_i128);
         client.transfer_from(&spender, &alice, &bob, &150_i128);
         assert_eq!(client.balance(&bob), 150_i128);

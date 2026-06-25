@@ -1,7 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, contracterror, symbol_short,
-    Address, Env, String, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Vec,
 };
 
 #[derive(Clone)]
@@ -51,17 +50,25 @@ impl RegistryContract {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::TotalUsers, &0u32);
-        env.storage().instance().set(&DataKey::UserList, &Vec::<Address>::new(&env));
-        env.storage().instance().extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .instance()
+            .set(&DataKey::UserList, &Vec::<Address>::new(&env));
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         Ok(())
     }
 
     pub fn register(env: Env, user: Address, username: String) -> Result<(), RegistryError> {
         user.require_auth();
-        if env.storage().persistent().has(&DataKey::UserProfile(user.clone())) {
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::UserProfile(user.clone()))
+        {
             return Err(RegistryError::AlreadyRegistered);
         }
-        if username.len() == 0 || username.len() > 32 {
+        if username.is_empty() || username.len() > 32 {
             return Err(RegistryError::InvalidUsername);
         }
         let profile = UserProfile {
@@ -72,7 +79,9 @@ impl RegistryContract {
             registered_at: env.ledger().timestamp(),
             bot_count: 0,
         };
-        env.storage().persistent().set(&DataKey::UserProfile(user.clone()), &profile);
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserProfile(user.clone()), &profile);
         env.storage().persistent().extend_ttl(
             &DataKey::UserProfile(user.clone()),
             LEDGER_THRESHOLD,
@@ -85,9 +94,17 @@ impl RegistryContract {
             .unwrap_or_else(|| Vec::new(&env));
         list.push_back(user.clone());
         env.storage().instance().set(&DataKey::UserList, &list);
-        let total: u32 = env.storage().instance().get(&DataKey::TotalUsers).unwrap_or(0);
-        env.storage().instance().set(&DataKey::TotalUsers, &(total + 1));
-        env.storage().instance().extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        let total: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalUsers)
+            .unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalUsers, &(total + 1));
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         env.events().publish(
             (symbol_short!("register"), user.clone()),
             env.ledger().timestamp(),
@@ -113,7 +130,9 @@ impl RegistryContract {
             .get(&DataKey::UserProfile(user.clone()))
             .ok_or(RegistryError::UserNotFound)?;
         profile.total_points = profile.total_points.saturating_add(points);
-        env.storage().persistent().set(&DataKey::UserProfile(user.clone()), &profile);
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserProfile(user.clone()), &profile);
         env.storage().persistent().extend_ttl(
             &DataKey::UserProfile(user.clone()),
             LEDGER_THRESHOLD,
@@ -129,7 +148,9 @@ impl RegistryContract {
             .get(&DataKey::UserProfile(user.clone()))
             .ok_or(RegistryError::UserNotFound)?;
         profile.bot_count = profile.bot_count.saturating_add(1);
-        env.storage().persistent().set(&DataKey::UserProfile(user.clone()), &profile);
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserProfile(user.clone()), &profile);
         Ok(())
     }
 
@@ -140,7 +161,9 @@ impl RegistryContract {
             .get(&DataKey::UserProfile(user.clone()))
             .ok_or(RegistryError::UserNotFound)?;
         profile.bot_count = profile.bot_count.saturating_sub(1);
-        env.storage().persistent().set(&DataKey::UserProfile(user.clone()), &profile);
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserProfile(user.clone()), &profile);
         Ok(())
     }
 
@@ -151,7 +174,9 @@ impl RegistryContract {
             .get(&DataKey::UserProfile(user.clone()))
             .ok_or(RegistryError::UserNotFound)?;
         profile.claimed_amt = profile.claimed_amt.saturating_add(amount);
-        env.storage().persistent().set(&DataKey::UserProfile(user.clone()), &profile);
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserProfile(user.clone()), &profile);
         Ok(())
     }
 
@@ -192,7 +217,10 @@ impl RegistryContract {
     }
 
     pub fn total_users(env: Env) -> u32 {
-        env.storage().instance().get(&DataKey::TotalUsers).unwrap_or(0)
+        env.storage()
+            .instance()
+            .get(&DataKey::TotalUsers)
+            .unwrap_or(0)
     }
 
     pub fn admin(env: Env) -> Address {
@@ -231,14 +259,18 @@ mod test {
         let (env, _admin, client) = setup();
         let user = Address::generate(&env);
         client.register(&user, &String::from_str(&env, "Alice"));
-        assert!(client.try_register(&user, &String::from_str(&env, "Alice2")).is_err());
+        assert!(client
+            .try_register(&user, &String::from_str(&env, "Alice2"))
+            .is_err());
     }
 
     #[test]
     fn test_empty_username_fails() {
         let (env, _admin, client) = setup();
         let user = Address::generate(&env);
-        assert!(client.try_register(&user, &String::from_str(&env, "")).is_err());
+        assert!(client
+            .try_register(&user, &String::from_str(&env, ""))
+            .is_err());
     }
 
     #[test]
