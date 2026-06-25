@@ -11,6 +11,39 @@ pub enum Tier {
     Premium = 2,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[contracttype]
+#[repr(u32)]
+pub enum BotTier {
+    Basic = 0,
+    Bronze = 1,
+    Silver = 2,
+    Gold = 3,
+    Diamond = 4,
+}
+
+impl BotTier {
+    pub fn price(&self) -> i128 {
+        match self {
+            BotTier::Basic   => 0,
+            BotTier::Bronze  => 500_0000000,
+            BotTier::Silver  => 2000_0000000,
+            BotTier::Gold    => 7500_0000000,
+            BotTier::Diamond => 25000_0000000,
+        }
+    }
+
+    pub fn name(&self, env: &Env) -> String {
+        match self {
+            BotTier::Basic   => String::from_str(env, "Basic Bot"),
+            BotTier::Bronze  => String::from_str(env, "Bronze Bot"),
+            BotTier::Silver  => String::from_str(env, "Silver Bot"),
+            BotTier::Gold    => String::from_str(env, "Gold Bot"),
+            BotTier::Diamond => String::from_str(env, "Diamond Bot"),
+        }
+    }
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub struct BotNFT {
@@ -331,5 +364,30 @@ mod test {
         let bot_id = client.mint_basic(&alice);
         let result = client.try_transfer(&bot_id, &bob, &charlie);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_admin_returns_initialized_admin() {
+        let (_env, admin, client) = setup();
+        assert_eq!(client.admin(), admin);
+    }
+
+    #[test]
+    fn test_bot_tier_prices() {
+        assert_eq!(BotTier::Basic.price(),   0);
+        assert_eq!(BotTier::Bronze.price(),  500_0000000);
+        assert_eq!(BotTier::Silver.price(),  2000_0000000);
+        assert_eq!(BotTier::Gold.price(),    7500_0000000);
+        assert_eq!(BotTier::Diamond.price(), 25000_0000000);
+    }
+
+    #[test]
+    fn test_bot_tier_names() {
+        let env = Env::default();
+        assert_eq!(BotTier::Basic.name(&env),   String::from_str(&env, "Basic Bot"));
+        assert_eq!(BotTier::Bronze.name(&env),  String::from_str(&env, "Bronze Bot"));
+        assert_eq!(BotTier::Silver.name(&env),  String::from_str(&env, "Silver Bot"));
+        assert_eq!(BotTier::Gold.name(&env),    String::from_str(&env, "Gold Bot"));
+        assert_eq!(BotTier::Diamond.name(&env), String::from_str(&env, "Diamond Bot"));
     }
 }
