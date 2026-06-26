@@ -53,6 +53,16 @@ impl BotTier {
             BotTier::Diamond => String::from_str(env, "Diamond Bot"),
         }
     }
+
+    pub fn rate(&self) -> u64 {
+        match self {
+            BotTier::Basic   => 1,
+            BotTier::Bronze  => 5,
+            BotTier::Silver  => 25,
+            BotTier::Gold    => 100,
+            BotTier::Diamond => 500,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -82,6 +92,9 @@ pub enum BotNFTError {
     NotFound = 2,
     Unauthorized = 3,
     InvalidTier = 4,
+    BotNotFound = 5,
+    NotOwner = 6,
+    InsufficientFunds = 7,
 }
 
 const LEDGER_BUMP: u32 = 120960;
@@ -448,5 +461,22 @@ mod test {
         assert_eq!(BotTier::Silver.name(&env),  String::from_str(&env, "Silver Bot"));
         assert_eq!(BotTier::Gold.name(&env),    String::from_str(&env, "Gold Bot"));
         assert_eq!(BotTier::Diamond.name(&env), String::from_str(&env, "Diamond Bot"));
+    }
+
+    #[test]
+    fn test_bot_tier_rates() {
+        assert_eq!(BotTier::Basic.rate(),   1);
+        assert_eq!(BotTier::Bronze.rate(),  5);
+        assert_eq!(BotTier::Silver.rate(),  25);
+        assert_eq!(BotTier::Gold.rate(),    100);
+        assert_eq!(BotTier::Diamond.rate(), 500);
+    }
+
+    #[test]
+    fn test_bot_nft_error_variants() {
+        assert_eq!(BotNFTError::AlreadyInitialized as u32, 1);
+        assert_eq!(BotNFTError::BotNotFound as u32, 5);
+        assert_eq!(BotNFTError::NotOwner as u32, 6);
+        assert_eq!(BotNFTError::InsufficientFunds as u32, 7);
     }
 }

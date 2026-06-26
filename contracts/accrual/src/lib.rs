@@ -5,6 +5,13 @@ use soroban_sdk::{
 
 #[derive(Clone)]
 #[contracttype]
+pub struct AccrualState {
+    pub last_claim_ts: u64,
+    pub total_claimed_points: u64,
+}
+
+#[derive(Clone)]
+#[contracttype]
 pub enum DataKey {
     Config,
     Admin,
@@ -16,6 +23,30 @@ pub enum DataKey {
 #[contracttype]
 pub struct Config {
     pub points_per_amt: u64,
+}
+
+fn read_accrual_state(env: &Env, user: &Address) -> Option<AccrualState> {
+    env.storage()
+        .persistent()
+        .get::<_, UserAccrual>(&DataKey::UserAccrual(user.clone()))
+        .map(|a| AccrualState {
+            last_claim_ts: a.last_claim_ts,
+            total_claimed_points: a.total_claimed_points,
+        })
+}
+
+fn write_accrual_state(env: &Env, user: &Address, state: AccrualState) {
+    if let Some(mut accrual) = env
+        .storage()
+        .persistent()
+        .get::<_, UserAccrual>(&DataKey::UserAccrual(user.clone()))
+    {
+        accrual.last_claim_ts = state.last_claim_ts;
+        accrual.total_claimed_points = state.total_claimed_points;
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserAccrual(user.clone()), &accrual);
+    }
 }
 
 #[derive(Clone)]
@@ -102,7 +133,7 @@ impl AccrualContract {
             Some(accrual) => {
                 let current_ts = env.ledger().timestamp();
                 let elapsed = current_ts.saturating_sub(accrual.last_claim_ts);
-                accrual.rate.saturating_mul(elapsed)
+                elapsed.saturating_mul(accrual.rate) / 3600
             }
             None => 0,
         }
@@ -123,7 +154,7 @@ impl AccrualContract {
 
         let current_ts = env.ledger().timestamp();
         let elapsed = current_ts.saturating_sub(accrual.last_claim_ts);
-        let pending = accrual.rate.saturating_mul(elapsed);
+        let pending = elapsed.saturating_mul(accrual.rate) / 3600;
 
         let config: Config = env
             .storage()
@@ -328,5 +359,24 @@ mod test {
         assert!(client
             .try_claim(&user, &token, &registry)
             .is_err());
+    }
+
+    #[test]
+    fn test_pending_points_uses_hourly_rate() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        // rate=3600 pts/hr, elapsed=3600s → exactly 3600 points
+        client.start_accrual(&user, &3600_u64);
+        env.ledger().with_mut(|l| { l.timestamp += 3600; });
+        assert_eq!(client.pending_points(&user), 3600);
+    }
+
+    #[test]
+    fn test_accrual_state_read() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.start_accrual(&user, &100_u64);
+        // pending_points returns 0 at t=0 (no elapsed)
+        assert_eq!(client.pending_points(&user), 0);
     }
 }
