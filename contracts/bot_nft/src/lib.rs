@@ -69,9 +69,11 @@ impl BotTier {
 #[contracttype]
 pub struct BotNFT {
     pub id: u64,
+    pub tier: BotTier,
     pub owner: Address,
-    pub tier: Tier,
-    pub rate: u64,
+    pub accrual_rate: u64,
+    pub minted_at: u64,
+    pub name: String,
 }
 
 #[derive(Clone)]
@@ -130,12 +132,15 @@ impl BotNFTContract {
     pub fn mint_basic(env: Env, owner: Address) -> Result<u64, BotNFTError> {
         owner.require_auth();
         let bot_id = Self::get_next_id(&env);
-        let rate = 10_u64;
+        let bot_tier = BotTier::Basic;
+        let name = bot_tier.name(&env);
         let bot = BotNFT {
             id: bot_id,
+            tier: bot_tier,
             owner: owner.clone(),
-            tier: Tier::Basic,
-            rate,
+            accrual_rate: bot_tier.rate(),
+            minted_at: env.ledger().timestamp(),
+            name,
         };
         env.storage().persistent().set(&DataKey::Bot(bot_id), &bot);
         env.storage().persistent().extend_ttl(
@@ -160,16 +165,19 @@ impl BotNFTContract {
             token_client.transfer(&owner, &env.current_contract_address(), &price);
         }
         let bot_id = Self::get_next_id(&env);
-        let rate = match tier {
-            Tier::Basic => 10_u64,
-            Tier::Advanced => 25_u64,
-            Tier::Premium => 50_u64,
+        let bot_tier = match tier {
+            Tier::Basic => BotTier::Basic,
+            Tier::Advanced => BotTier::Bronze,
+            Tier::Premium => BotTier::Silver,
         };
+        let name = bot_tier.name(&env);
         let bot = BotNFT {
             id: bot_id,
             owner: owner.clone(),
-            tier,
-            rate,
+            tier: bot_tier,
+            accrual_rate: bot_tier.rate(),
+            minted_at: env.ledger().timestamp(),
+            name,
         };
         env.storage().persistent().set(&DataKey::Bot(bot_id), &bot);
         env.storage().persistent().extend_ttl(
@@ -192,10 +200,10 @@ impl BotNFTContract {
             .storage()
             .persistent()
             .get(&DataKey::Bot(bot_id))
-            .ok_or(BotNFTError::NotFound)?;
+            .ok_or(BotNFTError::BotNotFound)?;
 
         if bot.owner != from {
-            return Err(BotNFTError::Unauthorized);
+            return Err(BotNFTError::NotOwner);
         }
 
         bot.owner = to.clone();
@@ -214,7 +222,7 @@ impl BotNFTContract {
         env.storage()
             .persistent()
             .get(&DataKey::Bot(bot_id))
-            .ok_or(BotNFTError::NotFound)
+            .ok_or(BotNFTError::BotNotFound)
     }
 
     pub fn get_user_bots(env: Env, user: Address) -> Vec<u64> {
@@ -229,7 +237,7 @@ impl BotNFTContract {
         let mut total = 0_u64;
         for id in bot_ids.iter() {
             if let Ok(bot) = Self::get_bot(env.clone(), id) {
-                total = total.saturating_add(bot.rate);
+                total = total.saturating_add(bot.accrual_rate);
             }
         }
         total
@@ -365,9 +373,19 @@ mod test {
         let advanced_bot = client.get_bot(&advanced_id);
         let premium_bot = client.get_bot(&premium_id);
 
-        assert_eq!(basic_bot.rate, 10);
-        assert_eq!(advanced_bot.rate, 25);
-        assert_eq!(premium_bot.rate, 50);
+        assert_eq!(basic_bot.accrual_rate, 1);
+        assert_eq!(advanced_bot.accrual_rate, 5);
+        assert_eq!(premium_bot.accrual_rate, 25);
+
+        assert_eq!(basic_bot.name, String::from_str(&env, "Basic Bot"));
+        assert_eq!(advanced_bot.name, String::from_str(&env, "Bronze Bot"));
+        assert_eq!(premium_bot.name, String::from_str(&env, "Silver Bot"));
+
+        assert_eq!(basic_bot.tier, BotTier::Basic);
+        assert_eq!(advanced_bot.tier, BotTier::Bronze);
+        assert_eq!(premium_bot.tier, BotTier::Silver);
+
+        assert_eq!(basic_bot.minted_at, env.ledger().timestamp());
     }
 
     #[test]

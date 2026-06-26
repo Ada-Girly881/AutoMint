@@ -315,7 +315,7 @@ mod test {
         let (env, _admin, registry, token, client) = setup();
         let user = Address::generate(&env);
         register_user(&env, &registry, &user, "user1");
-        client.start_accrual(&user, &1_u64);
+        client.start_accrual(&user, &3600_u64);
 
         env.ledger().with_mut(|ledger| {
             ledger.sequence_number = ledger.sequence_number + 10;
@@ -332,7 +332,7 @@ mod test {
         let user = Address::generate(&env);
         register_user(&env, &registry, &user, "user1");
         // Use low rate so total_points < points_per_amt (no mint triggered)
-        client.start_accrual(&user, &1_u64);
+        client.start_accrual(&user, &3600_u64);
 
         env.ledger().with_mut(|ledger| {
             ledger.sequence_number = ledger.sequence_number + 10;
@@ -363,7 +363,7 @@ mod test {
 
     #[test]
     fn test_pending_points_uses_hourly_rate() {
-        let (env, _admin, client) = setup();
+        let (env, _admin, _registry, _token, client) = setup();
         let user = Address::generate(&env);
         // rate=3600 pts/hr, elapsed=3600s → exactly 3600 points
         client.start_accrual(&user, &3600_u64);
@@ -373,7 +373,7 @@ mod test {
 
     #[test]
     fn test_accrual_state_read() {
-        let (env, _admin, client) = setup();
+        let (env, _admin, _registry, _token, client) = setup();
         let user = Address::generate(&env);
         client.start_accrual(&user, &100_u64);
         // pending_points returns 0 at t=0 (no elapsed)

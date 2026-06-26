@@ -1,4 +1,12 @@
 #![no_std]
+use soroban_sdk::{contract, contractimpl, Address, Env};
 
-// TODO: implement this contract.
-// See the project's GitHub Issues for the specific task assigned to this file.
+#[contract]
+pub struct MarketplaceContract;
+
+#[contractimpl]
+impl MarketplaceContract {
+    pub fn initialize(_env: Env, _admin: Address) {
+        // Dummy initialize
+    }
+}
