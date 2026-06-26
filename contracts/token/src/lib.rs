@@ -402,4 +402,21 @@ mod test {
         assert_eq!(client.balance(&bob), 150_i128);
         assert_eq!(client.allowance(&alice, &spender), 150_i128);
     }
+
+    #[test]
+    fn test_transfer_from_insufficient_allowance_fails() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        client.approve(
+            &alice,
+            &spender,
+            &100_i128,
+            &(env.ledger().sequence() + 1000),
+        );
+        let result = client.try_transfer_from(&spender, &alice, &bob, &200_i128);
+        assert!(result.is_err());
+    }
 }
