@@ -138,6 +138,8 @@ impl RegistryContract {
             LEDGER_THRESHOLD,
             LEDGER_BUMP,
         );
+        env.events()
+            .publish((symbol_short!("addpoints"), user), points);
         Ok(())
     }
 
@@ -339,6 +341,13 @@ mod test {
         }
         let lb = client.get_leaderboard(&3_u32);
         assert_eq!(lb.len(), 3);
+    }
+
+    #[test]
+    fn test_leaderboard_empty_when_no_users() {
+        let (_env, _admin, client) = setup();
+        let lb = client.get_leaderboard(&10_u32);
+        assert_eq!(lb.len(), 0);
     }
 
     #[test]
