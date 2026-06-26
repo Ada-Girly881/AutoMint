@@ -235,6 +235,10 @@ impl BotNFTContract {
         total
     }
 
+    pub fn get_tier_info(env: Env, tier: BotTier) -> (String, u64, i128) {
+        (tier.name(&env), tier.rate(), tier.price())
+    }
+
     fn get_next_id(env: &Env) -> u64 {
         let id: u64 = env
             .storage()
@@ -418,6 +422,20 @@ mod test {
     }
 
     #[test]
+    fn test_get_user_total_rate_sums_owned_bots() {
+        let (env, _admin, registry, token, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "user1");
+        fund_user(&env, &token, &user, 100_000_000_000);
+
+        client.mint_basic(&user);
+        client.mint_tier(&user, &Tier::Advanced, &token);
+        client.mint_tier(&user, &Tier::Premium, &token);
+
+        assert_eq!(client.get_user_total_rate(&user), 85);
+    }
+
+    #[test]
     fn test_double_initialize_fails() {
         let (env, _admin, _registry, _token, client) = setup();
         let admin = Address::generate(&env);
@@ -470,6 +488,16 @@ mod test {
         assert_eq!(BotTier::Silver.rate(),  25);
         assert_eq!(BotTier::Gold.rate(),    100);
         assert_eq!(BotTier::Diamond.rate(), 500);
+    }
+
+    #[test]
+    fn test_get_tier_info() {
+        let (env, _admin, _registry, _token, client) = setup();
+
+        assert_eq!(
+            client.get_tier_info(&BotTier::Gold),
+            (String::from_str(&env, "Gold Bot"), 100, 7500_0000000)
+        );
     }
 
     #[test]
