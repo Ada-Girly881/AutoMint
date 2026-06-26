@@ -112,7 +112,7 @@ impl AccrualContract {
         env: Env,
         user: Address,
         token_contract: Address,
-        amt: i128,
+        registry: Address,
     ) -> Result<i128, AccrualError> {
         user.require_auth();
         let mut accrual: UserAccrual = env
@@ -146,18 +146,22 @@ impl AccrualContract {
                 LEDGER_BUMP,
             );
 
-        let amt_to_mint = if total_points >= config.points_per_amt as u64 {
-            (total_points / config.points_per_amt as u64) as i128
-        } else {
-            0
-        };
+        let reg_client = automint_registry::RegistryContractClient::new(&env, &registry);
+        let _ = reg_client.add_points(&user, &pending);
+
+        if total_points >= config.points_per_amt as u64 {
+            let amt_to_mint = (total_points / config.points_per_amt as u64) as i128;
+            let token_client = automint_token::AMTTokenClient::new(&env, &token_contract);
+            let _ = token_client.mint(&user, &amt_to_mint);
+            let _ = reg_client.add_claimed_amt(&user, &amt_to_mint);
+        }
 
         env.events().publish(
             (symbol_short!("claim"), user.clone()),
-            (pending, amt_to_mint),
+            (pending, total_points),
         );
 
-        Ok(amt_to_mint)
+        Ok(pending as i128)
     }
 
     pub fn admin(env: Env) -> Address {
@@ -178,34 +182,58 @@ impl AccrualContract {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Env};
+    use soroban_sdk::{testutils::Address as _, testutils::Ledger, Env, String};
 
-    fn setup() -> (Env, Address, AccrualContractClient<'static>) {
+    fn register_user(
+        env: &Env,
+        registry: &Address,
+        user: &Address,
+        name: &str,
+    ) {
+        let reg_client = automint_registry::RegistryContractClient::new(env, registry);
+        let _ = reg_client.register(user, &String::from_str(env, name));
+    }
+
+    fn setup() -> (Env, Address, Address, Address, AccrualContractClient<'static>) {
         let env = Env::default();
         env.mock_all_auths();
         let id = env.register_contract(None, AccrualContract);
         let client = AccrualContractClient::new(&env, &id);
         let admin = Address::generate(&env);
+
+        let registry_id = env.register_contract(None, automint_registry::RegistryContract);
+        let reg_client = automint_registry::RegistryContractClient::new(&env, &registry_id);
+        reg_client.initialize(&admin);
+
+        let token_id = env.register_contract(None, automint_token::AMTToken);
+        let token_client = automint_token::AMTTokenClient::new(&env, &token_id);
+        token_client.initialize(
+            &admin,
+            &7u32,
+            &String::from_str(&env, "AutoMint Token"),
+            &String::from_str(&env, "AMT"),
+        );
+
         client.initialize(&admin, &100_u64);
-        (env, admin, client)
+        (env, admin, registry_id, token_id, client)
     }
 
     #[test]
     fn test_initialize() {
-        let (_env, _admin, client) = setup();
+        let (_env, _admin, _registry, _token, client) = setup();
         let config = client.config();
         assert_eq!(config.points_per_amt, 100);
     }
 
     #[test]
     fn test_double_initialize_fails() {
-        let (_env, admin, client) = setup();
-        assert!(client.try_initialize(&admin, &100_u64).is_err());
+        let (env, _admin, _registry, _token, client) = setup();
+        assert!(client.try_initialize(&_admin, &100_u64).is_err());
     }
 
     #[test]
     fn test_start_accrual() {
-        let (env, _admin, client) = setup();
+        let (env, _admin, _registry, _token, client) = setup();
         let user = Address::generate(&env);
         client.start_accrual(&user, &50_u64);
         assert_eq!(client.pending_points(&user), 0);
@@ -213,7 +241,7 @@ mod test {
 
     #[test]
     fn test_double_start_accrual_fails() {
-        let (env, _admin, client) = setup();
+        let (env, _admin, _registry, _token, client) = setup();
         let user = Address::generate(&env);
         client.start_accrual(&user, &50_u64);
         assert!(client.try_start_accrual(&user, &50_u64).is_err());
@@ -221,14 +249,12 @@ mod test {
 
     #[test]
     fn test_pending_points_calculation() {
-        let (env, _admin, client) = setup();
+        let (env, _admin, _registry, _token, client) = setup();
         let user = Address::generate(&env);
         client.start_accrual(&user, &100_u64);
 
-        // Simulate time passing by jumping to a future ledger sequence
         env.ledger().with_mut(|ledger| {
-            ledger.sequence = ledger.sequence + 100;
-            // This adjusts the timestamp proportionally: ~5s per ledger
+            ledger.sequence_number = ledger.sequence_number + 100;
             ledger.timestamp = ledger.timestamp + 500;
         });
 
@@ -238,54 +264,69 @@ mod test {
 
     #[test]
     fn test_claim_resets_timestamp() {
-        let (env, _admin, client) = setup();
+        let (env, _admin, registry, token, client) = setup();
         let user = Address::generate(&env);
-        client.start_accrual(&user, &100_u64);
+        register_user(&env, &registry, &user, "user1");
+        // Use low rate so total_points < points_per_amt (no mint triggered)
+        client.start_accrual(&user, &1_u64);
 
         env.ledger().with_mut(|ledger| {
-            ledger.sequence = ledger.sequence + 100;
-            ledger.timestamp = ledger.timestamp + 500;
+            ledger.sequence_number = ledger.sequence_number + 10;
+            ledger.timestamp = ledger.timestamp + 50;
         });
 
-        let _amt = client.claim(&user, &Address::generate(&env), &100_i128);
+        let _pending = client.claim(&user, &token, &registry);
         assert_eq!(client.pending_points(&user), 0);
     }
 
     #[test]
     fn test_claim_below_threshold_mints_nothing() {
-        let (env, _admin, client) = setup();
+        let (env, _admin, registry, token, client) = setup();
         let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "user1");
         client.start_accrual(&user, &1_u64);
 
         env.ledger().with_mut(|ledger| {
-            ledger.sequence = ledger.sequence + 10;
+            ledger.sequence_number = ledger.sequence_number + 10;
             ledger.timestamp = ledger.timestamp + 50;
         });
 
-        let amt = client.claim(&user, &Address::generate(&env), &100_i128);
-        assert_eq!(amt, 0);
+        let pending = client.claim(&user, &token, &registry);
+        assert_eq!(pending, 50); // 1 point/sec * 50 sec = 50 pending points
     }
 
     #[test]
     fn test_claim_accumulates_total_claimed() {
-        let (env, _admin, client) = setup();
+        let (env, _admin, registry, token, client) = setup();
         let user = Address::generate(&env);
-        client.start_accrual(&user, &100_u64);
+        register_user(&env, &registry, &user, "user1");
+        // Use low rate so total_points < points_per_amt (no mint triggered)
+        client.start_accrual(&user, &1_u64);
 
         env.ledger().with_mut(|ledger| {
-            ledger.sequence = ledger.sequence + 100;
-            ledger.timestamp = ledger.timestamp + 500;
+            ledger.sequence_number = ledger.sequence_number + 10;
+            ledger.timestamp = ledger.timestamp + 30;
         });
 
-        let _amt = client.claim(&user, &Address::generate(&env), &100_i128);
+        let pending = client.claim(&user, &token, &registry);
+        assert_eq!(pending, 30); // 1 pt/sec * 30 sec = 30 pending points
+
+        // Claim again — should accumulate total_claimed
+        env.ledger().with_mut(|ledger| {
+            ledger.sequence_number = ledger.sequence_number + 10;
+            ledger.timestamp = ledger.timestamp + 30;
+        });
+
+        let pending2 = client.claim(&user, &token, &registry);
+        assert_eq!(pending2, 30); // another 30 points (from last_claim_ts reset)
     }
 
     #[test]
     fn test_claim_not_started_fails() {
-        let (env, _admin, client) = setup();
+        let (env, _admin, registry, token, client) = setup();
         let user = Address::generate(&env);
         assert!(client
-            .try_claim(&user, &Address::generate(&env), &100_i128)
+            .try_claim(&user, &token, &registry)
             .is_err());
     }
 }

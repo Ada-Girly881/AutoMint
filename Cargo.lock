@@ -55,6 +55,8 @@ dependencies = [
 name = "automint-bot-nft"
 version = "0.1.0"
 dependencies = [
+ "automint-registry",
+ "automint-token",
  "soroban-sdk",
 ]
 
