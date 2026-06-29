@@ -209,6 +209,9 @@ impl RegistryContract {
 
     // Bubble sort in-contract — gas bounded by user count
     pub fn get_leaderboard(env: Env, limit: u32) -> Vec<UserProfile> {
+        if limit == 0 {
+            return Vec::new(&env);
+        }
         let list: Vec<Address> = env
             .storage()
             .instance()
@@ -540,6 +543,64 @@ mod test {
         let (env, _admin, client) = setup();
         let ghost = Address::generate(&env);
         assert!(client.try_decrement_bot_count(&ghost).is_err());
+    }
+
+    #[test]
+    fn test_leaderboard_limit_zero_returns_empty() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "U1"));
+        client.add_points(&user, &100_u64);
+        let lb = client.get_leaderboard(&0_u32);
+        assert_eq!(lb.len(), 0);
+    }
+
+    #[test]
+    fn test_leaderboard_limit_one_returns_top() {
+        let (env, _admin, client) = setup();
+        let u1 = Address::generate(&env);
+        let u2 = Address::generate(&env);
+        client.register(&u1, &String::from_str(&env, "U1"));
+        client.register(&u2, &String::from_str(&env, "U2"));
+        client.add_points(&u1, &100_u64);
+        client.add_points(&u2, &500_u64);
+        let lb = client.get_leaderboard(&1_u32);
+        assert_eq!(lb.len(), 1);
+        assert_eq!(lb.get(0).unwrap().total_points, 500);
+    }
+
+    #[test]
+    fn test_leaderboard_limit_exceeds_users() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "U1"));
+        client.add_points(&user, &100_u64);
+        let lb = client.get_leaderboard(&100_u32);
+        assert_eq!(lb.len(), 1);
+    }
+
+    #[test]
+    fn test_leaderboard_single_user() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "Solo"));
+        client.add_points(&user, &50_u64);
+        let lb = client.get_leaderboard(&10_u32);
+        assert_eq!(lb.len(), 1);
+        assert_eq!(lb.get(0).unwrap().username, String::from_str(&env, "Solo"));
+    }
+
+    #[test]
+    fn test_leaderboard_maintains_stable_order_for_equal_points() {
+        let (env, _admin, client) = setup();
+        let u1 = Address::generate(&env);
+        let u2 = Address::generate(&env);
+        client.register(&u1, &String::from_str(&env, "Equal1"));
+        client.register(&u2, &String::from_str(&env, "Equal2"));
+        client.add_points(&u1, &100_u64);
+        client.add_points(&u2, &100_u64);
+        let lb = client.get_leaderboard(&10_u32);
+        assert_eq!(lb.len(), 2);
     }
 }
 
