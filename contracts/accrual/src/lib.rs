@@ -275,11 +275,26 @@ mod test {
     }
 
     #[test]
+    fn test_start_accrual_initializes_correctly() {
+        let (env, _admin, _registry, _token, client) = setup();
+        let user = Address::generate(&env);
+        let start_ts = env.ledger().timestamp();
+
+        let result = client.try_start_accrual(&user, &50_u64);
+        assert!(result.is_ok());
+
+        let state = client.get_accrual_state(&user).unwrap();
+        assert_eq!(state.last_claim_ts, start_ts);
+        assert_eq!(state.total_claimed_points, 0);
+    }
+
+    #[test]
     fn test_double_start_accrual_fails() {
         let (env, _admin, _registry, _token, client) = setup();
         let user = Address::generate(&env);
         client.start_accrual(&user, &50_u64);
-        assert!(client.try_start_accrual(&user, &50_u64).is_err());
+        let result = client.try_start_accrual(&user, &50_u64);
+        assert_eq!(result, Ok(Err(AccrualError::AlreadyStarted)));
     }
 
     #[test]
