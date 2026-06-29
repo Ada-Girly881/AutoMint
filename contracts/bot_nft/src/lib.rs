@@ -217,7 +217,7 @@ impl BotNFTContract {
         env.storage()
             .persistent()
             .get(&DataKey::Bot(bot_id))
-            .ok_or(BotNFTError::NotFound)
+            .ok_or(BotNFTError::BotNotFound)
     }
 
     pub fn get_user_bots(env: Env, user: Address) -> Vec<u64> {
@@ -559,6 +559,34 @@ mod test {
             client.get_tier_info(&BotTier::Gold),
             (String::from_str(&env, "Gold Bot"), 100, 7500_0000000)
         );
+    }
+
+    #[test]
+    fn test_get_bot_returns_correct_bot() {
+        let (env, _admin, registry, _token, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "botowner");
+        let bot_id = client.mint_basic(&user);
+
+        let bot = client.get_bot(&bot_id);
+        assert_eq!(bot.id, bot_id);
+        assert_eq!(bot.owner, user);
+        assert_eq!(bot.rate, 10);
+        assert_eq!(bot.tier, Tier::Basic);
+    }
+
+    #[test]
+    fn test_get_bot_nonexistent_id_fails() {
+        let (env, _admin, _registry, _token, client) = setup();
+        let result = client.try_get_bot(&999);
+        assert_eq!(result, Ok(Err(BotNFTError::BotNotFound)));
+    }
+
+    #[test]
+    fn test_get_bot_zero_id_fails() {
+        let (env, _admin, _registry, _token, client) = setup();
+        let result = client.try_get_bot(&0);
+        assert_eq!(result, Ok(Err(BotNFTError::BotNotFound)));
     }
 
     #[test]
