@@ -66,6 +66,7 @@ pub enum AccrualError {
     AlreadyStarted = 2,
     NotStarted = 3,
     Unauthorized = 4,
+    InvalidRate = 5,
 }
 
 const LEDGER_BUMP: u32 = 120960;
@@ -79,6 +80,9 @@ impl AccrualContract {
     pub fn initialize(env: Env, admin: Address, points_per_amt: u64) -> Result<(), AccrualError> {
         if env.storage().instance().has(&DataKey::Initialized) {
             return Err(AccrualError::AlreadyInitialized);
+        }
+        if points_per_amt == 0 {
+            return Err(AccrualError::InvalidRate);
         }
         env.storage()
             .instance()
@@ -264,6 +268,16 @@ mod test {
     fn test_double_initialize_fails() {
         let (env, _admin, _registry, _token, client) = setup();
         assert!(client.try_initialize(&_admin, &100_u64).is_err());
+    }
+
+    #[test]
+    fn test_initialize_zero_points_per_amt_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, AccrualContract);
+        let client = AccrualContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        assert!(client.try_initialize(&admin, &0_u64).is_err());
     }
 
     #[test]
