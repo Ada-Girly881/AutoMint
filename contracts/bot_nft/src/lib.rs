@@ -95,6 +95,7 @@ pub enum BotNFTError {
     BotNotFound = 5,
     NotOwner = 6,
     InsufficientFunds = 7,
+    NotInitialized = 8,
 }
 
 const LEDGER_BUMP: u32 = 120960;
@@ -283,11 +284,11 @@ impl BotNFTContract {
             .set(&DataKey::UserBots(user.clone()), &new_bots);
     }
 
-    pub fn admin(env: Env) -> Address {
+    pub fn admin(env: Env) -> Result<Address, BotNFTError> {
         env.storage()
             .instance()
             .get(&DataKey::Admin)
-            .unwrap()
+            .ok_or(BotNFTError::NotInitialized)
     }
 
     fn increment_bot_count(env: &Env, user: &Address) {
@@ -524,6 +525,14 @@ mod test {
     }
 
     #[test]
+    fn test_admin_fails_if_not_initialized() {
+        let env = Env::default();
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        assert!(client.try_admin().is_err());
+    }
+
+    #[test]
     fn test_bot_tier_prices() {
         assert_eq!(BotTier::Basic.price(),   0);
         assert_eq!(BotTier::Bronze.price(),  500_0000000);
@@ -567,5 +576,6 @@ mod test {
         assert_eq!(BotNFTError::BotNotFound as u32, 5);
         assert_eq!(BotNFTError::NotOwner as u32, 6);
         assert_eq!(BotNFTError::InsufficientFunds as u32, 7);
+        assert_eq!(BotNFTError::NotInitialized as u32, 8);
     }
 }
