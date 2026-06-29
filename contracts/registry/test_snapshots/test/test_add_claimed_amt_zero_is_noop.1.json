@@ -36,7 +36,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "string": "Charlie"
+                  "string": "ZeroTest"
                 }
               ]
             }
@@ -119,7 +119,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 0
+                          "lo": 500
                         }
                       }
                     },
@@ -136,7 +136,7 @@
                         "symbol": "total_points"
                       },
                       "val": {
-                        "u64": 350
+                        "u64": 0
                       }
                     },
                     {
@@ -144,7 +144,7 @@
                         "symbol": "username"
                       },
                       "val": {
-                        "string": "Charlie"
+                        "string": "ZeroTest"
                       }
                     }
                   ]
@@ -166,7 +166,7 @@
                   "symbol": "Username"
                 },
                 {
-                  "string": "Charlie"
+                  "string": "ZeroTest"
                 }
               ]
             },
@@ -186,7 +186,7 @@
                       "symbol": "Username"
                     },
                     {
-                      "string": "Charlie"
+                      "string": "ZeroTest"
                     }
                   ]
                 },
@@ -447,7 +447,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "string": "Charlie"
+                  "string": "ZeroTest"
                 }
               ]
             }
@@ -515,7 +515,7 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "add_points"
+                "symbol": "add_claimed_amt"
               }
             ],
             "data": {
@@ -524,32 +524,12 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "u64": 100
+                  "i128": {
+                    "hi": 0,
+                    "lo": 500
+                  }
                 }
               ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "contract",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "addpoints"
-              },
-              {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-              }
-            ],
-            "data": {
-              "u64": 100
             }
           }
         }
@@ -568,7 +548,7 @@
                 "symbol": "fn_return"
               },
               {
-                "symbol": "add_points"
+                "symbol": "add_claimed_amt"
               }
             ],
             "data": "void"
@@ -592,7 +572,7 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "add_points"
+                "symbol": "add_claimed_amt"
               }
             ],
             "data": {
@@ -601,32 +581,12 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "u64": 250
+                  "i128": {
+                    "hi": 0,
+                    "lo": 0
+                  }
                 }
               ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "contract",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "addpoints"
-              },
-              {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-              }
-            ],
-            "data": {
-              "u64": 250
             }
           }
         }
@@ -645,7 +605,7 @@
                 "symbol": "fn_return"
               },
               {
-                "symbol": "add_points"
+                "symbol": "add_claimed_amt"
               }
             ],
             "data": "void"
@@ -720,7 +680,7 @@
                   "val": {
                     "i128": {
                       "hi": 0,
-                      "lo": 0
+                      "lo": 500
                     }
                   }
                 },
@@ -737,7 +697,7 @@
                     "symbol": "total_points"
                   },
                   "val": {
-                    "u64": 350
+                    "u64": 0
                   }
                 },
                 {
@@ -745,7 +705,7 @@
                     "symbol": "username"
                   },
                   "val": {
-                    "string": "Charlie"
+                    "string": "ZeroTest"
                   }
                 }
               ]

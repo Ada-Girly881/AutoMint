@@ -192,10 +192,18 @@ impl RegistryContract {
             .persistent()
             .get(&DataKey::UserProfile(user.clone()))
             .ok_or(RegistryError::NotRegistered)?;
+        if amount == 0 {
+            return Ok(());
+        }
         profile.claimed_amt = profile.claimed_amt.saturating_add(amount);
         env.storage()
             .persistent()
             .set(&DataKey::UserProfile(user.clone()), &profile);
+        env.storage().persistent().extend_ttl(
+            &DataKey::UserProfile(user.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
         Ok(())
     }
 
@@ -451,6 +459,87 @@ mod test {
         assert_eq!(retrieved_admin1, admin);
         assert_eq!(retrieved_admin2, admin);
         assert_eq!(retrieved_admin1, retrieved_admin2);
+    }
+
+    #[test]
+    fn test_get_user_returns_not_registered_error() {
+        let (env, _admin, client) = setup();
+        let ghost = Address::generate(&env);
+        let result = client.try_get_user(&ghost);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_user_returns_full_profile() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "FullCheck"));
+        client.add_points(&user, &42_u64);
+        client.add_claimed_amt(&user, &100_i128);
+        client.increment_bot_count(&user);
+        let profile = client.get_user(&user);
+        assert_eq!(profile.username, String::from_str(&env, "FullCheck"));
+        assert_eq!(profile.total_points, 42);
+        assert_eq!(profile.claimed_amt, 100);
+        assert_eq!(profile.bot_count, 1);
+    }
+
+    #[test]
+    fn test_add_claimed_amt_zero_is_noop() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "ZeroTest"));
+        client.add_claimed_amt(&user, &500_i128);
+        client.add_claimed_amt(&user, &0_i128);
+        assert_eq!(client.get_user(&user).claimed_amt, 500);
+    }
+
+    #[test]
+    fn test_add_claimed_amt_unregistered_fails() {
+        let (env, _admin, client) = setup();
+        let ghost = Address::generate(&env);
+        assert!(client.try_add_claimed_amt(&ghost, &100_i128).is_err());
+    }
+
+    #[test]
+    fn test_add_claimed_amt_extends_ttl() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "TtlTest"));
+        client.add_claimed_amt(&user, &100_i128);
+        let profile = client.get_user(&user);
+        assert_eq!(profile.claimed_amt, 100);
+    }
+
+    #[test]
+    fn test_add_claimed_amt_large_values() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "LargeVal"));
+        client.add_claimed_amt(&user, &i128::MAX);
+        client.add_claimed_amt(&user, &1_i128);
+        assert_eq!(client.get_user(&user).claimed_amt, i128::MAX);
+    }
+
+    #[test]
+    fn test_add_points_unregistered_fails() {
+        let (env, _admin, client) = setup();
+        let ghost = Address::generate(&env);
+        assert!(client.try_add_points(&ghost, &100_u64).is_err());
+    }
+
+    #[test]
+    fn test_increment_bot_count_unregistered_fails() {
+        let (env, _admin, client) = setup();
+        let ghost = Address::generate(&env);
+        assert!(client.try_increment_bot_count(&ghost).is_err());
+    }
+
+    #[test]
+    fn test_decrement_bot_count_unregistered_fails() {
+        let (env, _admin, client) = setup();
+        let ghost = Address::generate(&env);
+        assert!(client.try_decrement_bot_count(&ghost).is_err());
     }
 }
 

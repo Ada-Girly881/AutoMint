@@ -36,7 +36,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "string": "Charlie"
+                  "string": "FullCheck"
                 }
               ]
             }
@@ -45,6 +45,7 @@
         }
       ]
     ],
+    [],
     [],
     [],
     []
@@ -109,7 +110,7 @@
                         "symbol": "bot_count"
                       },
                       "val": {
-                        "u32": 0
+                        "u32": 1
                       }
                     },
                     {
@@ -119,7 +120,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 0
+                          "lo": 100
                         }
                       }
                     },
@@ -136,7 +137,7 @@
                         "symbol": "total_points"
                       },
                       "val": {
-                        "u64": 350
+                        "u64": 42
                       }
                     },
                     {
@@ -144,7 +145,7 @@
                         "symbol": "username"
                       },
                       "val": {
-                        "string": "Charlie"
+                        "string": "FullCheck"
                       }
                     }
                   ]
@@ -166,7 +167,7 @@
                   "symbol": "Username"
                 },
                 {
-                  "string": "Charlie"
+                  "string": "FullCheck"
                 }
               ]
             },
@@ -186,7 +187,7 @@
                       "symbol": "Username"
                     },
                     {
-                      "string": "Charlie"
+                      "string": "FullCheck"
                     }
                   ]
                 },
@@ -447,7 +448,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "string": "Charlie"
+                  "string": "FullCheck"
                 }
               ]
             }
@@ -524,7 +525,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "u64": 100
+                  "u64": 42
                 }
               ]
             }
@@ -549,7 +550,7 @@
               }
             ],
             "data": {
-              "u64": 100
+              "u64": 42
             }
           }
         }
@@ -592,7 +593,7 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "add_points"
+                "symbol": "add_claimed_amt"
               }
             ],
             "data": {
@@ -601,32 +602,12 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "u64": 250
+                  "i128": {
+                    "hi": 0,
+                    "lo": 100
+                  }
                 }
               ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "contract",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "addpoints"
-              },
-              {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-              }
-            ],
-            "data": {
-              "u64": 250
             }
           }
         }
@@ -645,7 +626,54 @@
                 "symbol": "fn_return"
               },
               {
-                "symbol": "add_points"
+                "symbol": "add_claimed_amt"
+              }
+            ],
+            "data": "void"
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
+              },
+              {
+                "symbol": "increment_bot_count"
+              }
+            ],
+            "data": {
+              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "increment_bot_count"
               }
             ],
             "data": "void"
@@ -710,7 +738,7 @@
                     "symbol": "bot_count"
                   },
                   "val": {
-                    "u32": 0
+                    "u32": 1
                   }
                 },
                 {
@@ -720,7 +748,7 @@
                   "val": {
                     "i128": {
                       "hi": 0,
-                      "lo": 0
+                      "lo": 100
                     }
                   }
                 },
@@ -737,7 +765,7 @@
                     "symbol": "total_points"
                   },
                   "val": {
-                    "u64": 350
+                    "u64": 42
                   }
                 },
                 {
@@ -745,7 +773,7 @@
                     "symbol": "username"
                   },
                   "val": {
-                    "string": "Charlie"
+                    "string": "FullCheck"
                   }
                 }
               ]
