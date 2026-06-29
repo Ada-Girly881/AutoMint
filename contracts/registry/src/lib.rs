@@ -170,6 +170,11 @@ impl RegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::UserProfile(user.clone()), &profile);
+        env.storage().persistent().extend_ttl(
+            &DataKey::UserProfile(user.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
         Ok(())
     }
 
@@ -418,6 +423,16 @@ mod test {
     }
 
     #[test]
+    fn test_increment_bot_count_from_zero() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "FreshUser"));
+        assert_eq!(client.get_user(&user).bot_count, 0);
+        client.increment_bot_count(&user);
+        assert_eq!(client.get_user(&user).bot_count, 1);
+    }
+
+    #[test]
     fn test_increment_decrement_bot_count() {
         let (env, _admin, client) = setup();
         let user = Address::generate(&env);
@@ -532,7 +547,8 @@ mod test {
     fn test_increment_bot_count_unregistered_fails() {
         let (env, _admin, client) = setup();
         let ghost = Address::generate(&env);
-        assert!(client.try_increment_bot_count(&ghost).is_err());
+        let result = client.try_increment_bot_count(&ghost);
+        assert_eq!(result, Ok(Err(RegistryError::NotRegistered)));
     }
 
     #[test]
