@@ -188,6 +188,9 @@ impl BotNFTContract {
 
     pub fn transfer(env: Env, bot_id: u64, from: Address, to: Address) -> Result<(), BotNFTError> {
         from.require_auth();
+        if from == to {
+            return Ok(());
+        }
         let mut bot: BotNFT = env
             .storage()
             .persistent()
@@ -195,7 +198,7 @@ impl BotNFTContract {
             .ok_or(BotNFTError::NotFound)?;
 
         if bot.owner != from {
-            return Err(BotNFTError::Unauthorized);
+            return Err(BotNFTError::NotOwner);
         }
 
         bot.owner = to.clone();
@@ -454,6 +457,64 @@ mod test {
         let bot_id = client.mint_basic(&alice);
         let result = client.try_transfer(&bot_id, &bob, &charlie);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_transfer_self_transfer_is_noop() {
+        let (env, _admin, registry, _token, client) = setup();
+        let alice = Address::generate(&env);
+        register_user(&env, &registry, &alice, "alice");
+
+        let bot_id = client.mint_basic(&alice);
+        let result = client.try_transfer(&bot_id, &alice, &alice);
+        assert!(result.is_ok());
+        assert_eq!(client.get_user_bots(&alice).len(), 1);
+        let bot = client.get_bot(&bot_id);
+        assert_eq!(bot.owner, alice);
+    }
+
+    #[test]
+    fn test_transfer_nonexistent_bot_fails() {
+        let (env, _admin, registry, _token, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        register_user(&env, &registry, &alice, "alice");
+
+        let result = client.try_transfer(&999, &alice, &bob);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_user_total_rate_empty_user() {
+        let (env, _admin, registry, _token, client) = setup();
+        let user = Address::generate(&env);
+        assert_eq!(client.get_user_total_rate(&user), 0);
+    }
+
+    #[test]
+    fn test_get_user_total_rate_single_bot() {
+        let (env, _admin, registry, _token, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "user1");
+        client.mint_basic(&user);
+        assert_eq!(client.get_user_total_rate(&user), 10);
+    }
+
+    #[test]
+    fn test_get_user_total_rate_after_transfer() {
+        let (env, _admin, registry, _token, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        register_user(&env, &registry, &alice, "alice");
+        register_user(&env, &registry, &bob, "bob");
+
+        let bot_id = client.mint_basic(&alice);
+        assert_eq!(client.get_user_total_rate(&alice), 10);
+        assert_eq!(client.get_user_total_rate(&bob), 0);
+
+        client.transfer(&bot_id, &alice, &bob);
+        assert_eq!(client.get_user_total_rate(&alice), 0);
+        assert_eq!(client.get_user_total_rate(&bob), 10);
     }
 
     #[test]
