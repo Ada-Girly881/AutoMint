@@ -252,7 +252,10 @@ impl RegistryContract {
     }
 
     pub fn admin(env: Env) -> Result<Address, RegistryError> {
-        env.storage().instance().get(&DataKey::Admin).ok_or(RegistryError::NotInitialized)
+        env.storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(RegistryError::NotInitialized)
     }
 }
 
@@ -551,4 +554,3 @@ mod test {
         assert!(client.try_decrement_bot_count(&ghost).is_err());
     }
 }
-
