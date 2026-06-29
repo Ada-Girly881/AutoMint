@@ -568,4 +568,58 @@ mod test {
         assert_eq!(BotNFTError::NotOwner as u32, 6);
         assert_eq!(BotNFTError::InsufficientFunds as u32, 7);
     }
+
+    #[test]
+    fn test_get_user_bots_empty_for_unregistered_user() {
+        let (env, _admin, _registry, _token, client) = setup();
+        let ghost = Address::generate(&env);
+        let bots = client.get_user_bots(&ghost);
+        assert_eq!(bots.len(), 0);
+    }
+
+    #[test]
+    fn test_get_user_bots_after_transfer_removes_from_sender() {
+        let (env, _admin, registry, _token, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        register_user(&env, &registry, &alice, "alice");
+        register_user(&env, &registry, &bob, "bob");
+
+        let bot_id = client.mint_basic(&alice);
+        assert_eq!(client.get_user_bots(&alice).len(), 1);
+        assert_eq!(client.get_user_bots(&bob).len(), 0);
+
+        client.transfer(&bot_id, &alice, &bob);
+        assert_eq!(client.get_user_bots(&alice).len(), 0);
+        assert_eq!(client.get_user_bots(&bob).len(), 1);
+    }
+
+    #[test]
+    fn test_get_user_bots_multiple_bots_same_user() {
+        let (env, _admin, registry, token, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "user1");
+        fund_user(&env, &token, &user, 100_000_000_000);
+
+        let id1 = client.mint_basic(&user);
+        let id2 = client.mint_basic(&user);
+        let id3 = client.mint_tier(&user, &Tier::Premium, &token);
+
+        let bots = client.get_user_bots(&user);
+        assert_eq!(bots.len(), 3);
+        let mut ids: Vec<u64> = bots.iter().collect();
+        ids.sort();
+        assert_eq!(ids, vec![id1, id2, id3]);
+    }
+
+    #[test]
+    fn test_get_user_bots_self_transfer_preserves_list() {
+        let (env, _admin, registry, _token, client) = setup();
+        let alice = Address::generate(&env);
+        register_user(&env, &registry, &alice, "alice");
+
+        let bot_id = client.mint_basic(&alice);
+        client.transfer(&bot_id, &alice, &alice);
+        assert_eq!(client.get_user_bots(&alice).len(), 1);
+    }
 }
