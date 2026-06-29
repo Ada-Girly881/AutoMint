@@ -607,9 +607,9 @@ mod test {
 
         let bots = client.get_user_bots(&user);
         assert_eq!(bots.len(), 3);
-        let mut ids: Vec<u64> = bots.iter().collect();
-        ids.sort();
-        assert_eq!(ids, vec![id1, id2, id3]);
+        assert!(bots.iter().any(|id| id == id1));
+        assert!(bots.iter().any(|id| id == id2));
+        assert!(bots.iter().any(|id| id == id3));
     }
 
     #[test]
