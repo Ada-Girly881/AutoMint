@@ -154,37 +154,53 @@ impl BotNFTContract {
 
     pub fn mint_tier(env: Env, owner: Address, tier: Tier, token: Address) -> Result<u64, BotNFTError> {
         owner.require_auth();
+        
+        // Get price and validate token transfer if needed
         let price = tier.price();
         if price > 0 {
             let token_client = token::Client::new(&env, &token);
+            // Transfer will fail if owner has insufficient balance
             token_client.transfer(&owner, &env.current_contract_address(), &price);
         }
+        
+        // Get the next bot ID
         let bot_id = Self::get_next_id(&env);
+        
+        // Map tier to rate
         let rate = match tier {
             Tier::Basic => 10_u64,
             Tier::Advanced => 25_u64,
             Tier::Premium => 50_u64,
         };
+        
+        // Create and store the bot
         let bot = BotNFT {
             id: bot_id,
             owner: owner.clone(),
             tier,
             rate,
         };
+        
         env.storage().persistent().set(&DataKey::Bot(bot_id), &bot);
         env.storage().persistent().extend_ttl(
             &DataKey::Bot(bot_id),
             LEDGER_THRESHOLD,
             LEDGER_BUMP,
         );
+        
+        // Update user's bot list and increment bot count in registry
         Self::add_bot_to_user(&env, &owner, bot_id);
         Self::increment_bot_count(&env, &owner);
+        
+        // Emit mint event
         env.events().publish(
             (symbol_short!("mint"), owner.clone()),
             (bot_id, tier),
         );
+        
         Ok(bot_id)
     }
+
 
     pub fn transfer(env: Env, bot_id: u64, from: Address, to: Address) -> Result<(), BotNFTError> {
         from.require_auth();
@@ -568,4 +584,116 @@ mod test {
         assert_eq!(BotNFTError::NotOwner as u32, 6);
         assert_eq!(BotNFTError::InsufficientFunds as u32, 7);
     }
+
+    #[test]
+    fn test_mint_tier_basic_is_free() {
+        let (env, _admin, registry, token_id, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "testuser");
+        
+        let token_client = automint_token::AMTTokenClient::new(&env, &token_id);
+        let initial_balance = token_client.balance(&user);
+        let bot_id = client.mint_tier(&user, &Tier::Basic, &token_id);
+        let final_balance = token_client.balance(&user);
+        
+        // Basic tier should not charge
+        assert_eq!(initial_balance, final_balance);
+        assert_eq!(bot_id, 1); // First mint in setup uses id 0
+    }
+
+    #[test]
+    fn test_mint_tier_insufficient_funds() {
+        let (env, _admin, registry, token_id, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "testuser");
+        
+        // User has 0 balance, cannot mint Advanced tier
+        let result = client.try_mint_tier(&user, &Tier::Advanced, &token_id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mint_tier_sequential_ids() {
+        let (env, _admin, registry, token_id, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "testuser");
+        
+        let bot1 = client.mint_tier(&user, &Tier::Basic, &token_id);
+        let bot2 = client.mint_tier(&user, &Tier::Basic, &token_id);
+        let bot3 = client.mint_tier(&user, &Tier::Basic, &token_id);
+        
+        assert_eq!(bot1, 1); // First mint in setup uses id 0
+        assert_eq!(bot2, 2);
+        assert_eq!(bot3, 3);
+    }
+
+    #[test]
+    fn test_mint_tier_updates_user_bot_list() {
+        let (env, _admin, registry, token_id, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "testuser");
+        
+        let bot_id = client.mint_tier(&user, &Tier::Basic, &token_id);
+        let user_bots = client.get_user_bots(&user);
+        
+        assert_eq!(user_bots.len(), 1);
+        assert_eq!(user_bots.get(0).unwrap(), bot_id);
+    }
+
+    #[test]
+    fn test_mint_tier_correct_rate_assignment() {
+        let (env, _admin, registry, token_id, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "testuser");
+        
+        // Mint basic (free)
+        let bot_basic = client.mint_tier(&user, &Tier::Basic, &token_id);
+        
+        // Fund user and mint advanced
+        fund_user(&env, &token_id, &user, 500_0000000);
+        let bot_advanced = client.mint_tier(&user, &Tier::Advanced, &token_id);
+        
+        // Fund user more and mint premium
+        fund_user(&env, &token_id, &user, 2000_0000000);
+        let bot_premium = client.mint_tier(&user, &Tier::Premium, &token_id);
+        
+        let basic_nft = client.get_bot(&bot_basic);
+        let advanced_nft = client.get_bot(&bot_advanced);
+        let premium_nft = client.get_bot(&bot_premium);
+        
+        assert_eq!(basic_nft.rate, 10);
+        assert_eq!(advanced_nft.rate, 25);
+        assert_eq!(premium_nft.rate, 50);
+    }
+
+    #[test]
+    fn test_get_tier_info_all_tiers() {
+        let (env, _admin, _registry, _token, client) = setup();
+
+        let basic = client.get_tier_info(&BotTier::Basic);
+        assert_eq!(basic.0, String::from_str(&env, "Basic Bot"));
+        assert_eq!(basic.1, 1);
+        assert_eq!(basic.2, 0);
+
+        let bronze = client.get_tier_info(&BotTier::Bronze);
+        assert_eq!(bronze.0, String::from_str(&env, "Bronze Bot"));
+        assert_eq!(bronze.1, 5);
+        assert_eq!(bronze.2, 500_0000000);
+
+        let silver = client.get_tier_info(&BotTier::Silver);
+        assert_eq!(silver.0, String::from_str(&env, "Silver Bot"));
+        assert_eq!(silver.1, 25);
+        assert_eq!(silver.2, 2000_0000000);
+
+        let gold = client.get_tier_info(&BotTier::Gold);
+        assert_eq!(gold.0, String::from_str(&env, "Gold Bot"));
+        assert_eq!(gold.1, 100);
+        assert_eq!(gold.2, 7500_0000000);
+
+        let diamond = client.get_tier_info(&BotTier::Diamond);
+        assert_eq!(diamond.0, String::from_str(&env, "Diamond Bot"));
+        assert_eq!(diamond.1, 500);
+        assert_eq!(diamond.2, 25000_0000000);
+    }
 }
+
