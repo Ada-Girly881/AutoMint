@@ -139,6 +139,10 @@ impl AccrualContract {
         }
     }
 
+    pub fn get_accrual_state(env: Env, user: Address) -> Option<AccrualState> {
+        read_accrual_state(&env, &user)
+    }
+
     pub fn claim(
         env: Env,
         user: Address,
@@ -363,7 +367,7 @@ mod test {
 
     #[test]
     fn test_pending_points_uses_hourly_rate() {
-        let (env, _admin, client) = setup();
+        let (env, _admin, _registry, _token, client) = setup();
         let user = Address::generate(&env);
         // rate=3600 pts/hr, elapsed=3600s → exactly 3600 points
         client.start_accrual(&user, &3600_u64);
@@ -373,10 +377,29 @@ mod test {
 
     #[test]
     fn test_accrual_state_read() {
-        let (env, _admin, client) = setup();
+        let (env, _admin, _registry, _token, client) = setup();
         let user = Address::generate(&env);
         client.start_accrual(&user, &100_u64);
         // pending_points returns 0 at t=0 (no elapsed)
         assert_eq!(client.pending_points(&user), 0);
+    }
+
+    #[test]
+    fn test_get_accrual_state_returns_none_before_start() {
+        let (env, _admin, _registry, _token, client) = setup();
+        let user = Address::generate(&env);
+
+        assert!(client.get_accrual_state(&user).is_none());
+    }
+
+    #[test]
+    fn test_get_accrual_state_returns_started_state() {
+        let (env, _admin, _registry, _token, client) = setup();
+        let user = Address::generate(&env);
+        client.start_accrual(&user, &100_u64);
+
+        let state = client.get_accrual_state(&user).unwrap();
+        assert_eq!(state.last_claim_ts, env.ledger().timestamp());
+        assert_eq!(state.total_claimed_points, 0);
     }
 }
