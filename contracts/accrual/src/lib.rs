@@ -66,6 +66,7 @@ pub enum AccrualError {
     AlreadyStarted = 2,
     NotStarted = 3,
     Unauthorized = 4,
+    NotInitialized = 5,
 }
 
 const LEDGER_BUMP: u32 = 120960;
@@ -206,11 +207,11 @@ impl AccrualContract {
             .unwrap()
     }
 
-    pub fn config(env: Env) -> Config {
+    pub fn config(env: Env) -> Result<Config, AccrualError> {
         env.storage()
             .instance()
             .get(&DataKey::Config)
-            .unwrap()
+            .ok_or(AccrualError::NotInitialized)
     }
 }
 
@@ -478,5 +479,23 @@ mod test {
         let (_env, _admin, _registry, _token, client) = setup();
         let config = client.config();
         assert_eq!(config.points_per_amt, 100);
+    }
+
+    #[test]
+    fn test_config_fails_before_initialize() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, AccrualContract);
+        let client = AccrualContractClient::new(&env, &id);
+        let result = client.try_config();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_config_persists_across_calls() {
+        let (_env, _admin, _registry, _token, client) = setup();
+        let c1 = client.config();
+        let c2 = client.config();
+        assert_eq!(c1.points_per_amt, c2.points_per_amt);
     }
 }
