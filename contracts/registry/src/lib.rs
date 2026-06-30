@@ -68,6 +68,8 @@ impl RegistryContract {
 
     pub fn register(env: Env, user: Address, username: String) -> Result<(), RegistryError> {
         user.require_auth();
+        
+        // Check if user is already registered
         if env
             .storage()
             .persistent()
@@ -75,9 +77,12 @@ impl RegistryContract {
         {
             return Err(RegistryError::AlreadyRegistered);
         }
+        
+        // Validate username length (empty or too long)
         if username.is_empty() || username.len() > 32 {
             return Err(RegistryError::UsernameTaken);
         }
+        
         // Check for username uniqueness
         if env
             .storage()
@@ -86,6 +91,8 @@ impl RegistryContract {
         {
             return Err(RegistryError::UsernameTaken);
         }
+        
+        // Create new user profile with initial values
         let profile = UserProfile {
             address: user.clone(),
             username: username.clone(),
@@ -94,17 +101,25 @@ impl RegistryContract {
             registered_at: env.ledger().timestamp(),
             bot_count: 0,
         };
+        
+        // Store user profile
         env.storage()
             .persistent()
             .set(&DataKey::UserProfile(user.clone()), &profile);
+        
+        // Store username mapping
         env.storage()
             .persistent()
             .set(&DataKey::Username(username), &user);
+        
+        // Extend TTL for user profile
         env.storage().persistent().extend_ttl(
             &DataKey::UserProfile(user.clone()),
             LEDGER_THRESHOLD,
             LEDGER_BUMP,
         );
+        
+        // Add user to the global user list
         let mut list: Vec<Address> = env
             .storage()
             .instance()
@@ -112,6 +127,8 @@ impl RegistryContract {
             .unwrap_or_else(|| Vec::new(&env));
         list.push_back(user.clone());
         env.storage().instance().set(&DataKey::UserList, &list);
+        
+        // Increment total user counter
         let total: u32 = env
             .storage()
             .instance()
@@ -120,13 +137,18 @@ impl RegistryContract {
         env.storage()
             .instance()
             .set(&DataKey::TotalUsers, &(total + 1));
+        
+        // Extend instance storage TTL
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+        
+        // Emit registration event
         env.events().publish(
             (symbol_short!("register"), user.clone()),
             env.ledger().timestamp(),
         );
+        
         Ok(())
     }
 
@@ -171,6 +193,11 @@ impl RegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::UserProfile(user.clone()), &profile);
+        env.storage().persistent().extend_ttl(
+            &DataKey::UserProfile(user.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
         Ok(())
     }
 
@@ -422,6 +449,16 @@ mod test {
     }
 
     #[test]
+    fn test_increment_bot_count_from_zero() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "FreshUser"));
+        assert_eq!(client.get_user(&user).bot_count, 0);
+        client.increment_bot_count(&user);
+        assert_eq!(client.get_user(&user).bot_count, 1);
+    }
+
+    #[test]
     fn test_increment_decrement_bot_count() {
         let (env, _admin, client) = setup();
         let user = Address::generate(&env);
@@ -450,6 +487,24 @@ mod test {
     // #37: Test admin function returns correct admin address
     #[test]
     fn test_admin_returns_current_admin() {
+        let (_env, admin, client) = setup();
+        assert_eq!(client.admin(), admin);
+    }
+
+    // Test double-initialization fails with the AlreadyInitialized variant
+    #[test]
+    fn test_double_initialize_fails() {
+        let (env, _admin, client) = setup();
+        let other_admin = Address::generate(&env);
+        assert_eq!(
+            client.try_initialize(&other_admin),
+            Err(Ok(RegistryError::AlreadyInitialized))
+        );
+    }
+
+    // Test initialize stores the admin address in storage
+    #[test]
+    fn test_initialize_sets_admin() {
         let (_env, admin, client) = setup();
         assert_eq!(client.admin(), admin);
     }
@@ -544,7 +599,8 @@ mod test {
     fn test_increment_bot_count_unregistered_fails() {
         let (env, _admin, client) = setup();
         let ghost = Address::generate(&env);
-        assert!(client.try_increment_bot_count(&ghost).is_err());
+        let result = client.try_increment_bot_count(&ghost);
+        assert_eq!(result, Ok(Err(RegistryError::NotRegistered)));
     }
 
     #[test]
@@ -552,5 +608,73 @@ mod test {
         let (env, _admin, client) = setup();
         let ghost = Address::generate(&env);
         assert!(client.try_decrement_bot_count(&ghost).is_err());
+    }
+
+    #[test]
+    fn test_register_with_max_length_username() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        let max_username = String::from_str(&env, "12345678901234567890123456789012"); // 32 chars
+        client.register(&user, &max_username);
+        let profile = client.get_user(&user);
+        assert_eq!(profile.username, max_username);
+    }
+
+    #[test]
+    fn test_register_with_single_char_username() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        let short_username = String::from_str(&env, "a");
+        client.register(&user, &short_username);
+        let profile = client.get_user(&user);
+        assert_eq!(profile.username, short_username);
+    }
+
+    #[test]
+    fn test_register_initializes_all_fields_correctly() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        let username = String::from_str(&env, "testuser");
+        
+        client.register(&user, &username);
+        let profile = client.get_user(&user);
+        
+        assert_eq!(profile.address, user);
+        assert_eq!(profile.username, username);
+        assert_eq!(profile.total_points, 0);
+        assert_eq!(profile.claimed_amt, 0);
+        assert_eq!(profile.bot_count, 0);
+        // registered_at will be set to env.ledger().timestamp() which is 0 in tests
+        assert_eq!(profile.registered_at, env.ledger().timestamp());
+    }
+
+    #[test]
+    fn test_register_increments_total_users() {
+        let (env, _admin, client) = setup();
+        let initial_count = client.total_users();
+        
+        let user1 = Address::generate(&env);
+        client.register(&user1, &String::from_str(&env, "user1"));
+        assert_eq!(client.total_users(), initial_count + 1);
+        
+        let user2 = Address::generate(&env);
+        client.register(&user2, &String::from_str(&env, "user2"));
+        assert_eq!(client.total_users(), initial_count + 2);
+    }
+
+    #[test]
+    fn test_register_username_case_sensitive() {
+        let (env, _admin, client) = setup();
+        let user1 = Address::generate(&env);
+        let user2 = Address::generate(&env);
+        
+        client.register(&user1, &String::from_str(&env, "TestUser"));
+        client.register(&user2, &String::from_str(&env, "testuser"));
+        
+        // Both should succeed since usernames are case-sensitive
+        let profile1 = client.get_user(&user1);
+        let profile2 = client.get_user(&user2);
+        assert_eq!(profile1.username, String::from_str(&env, "TestUser"));
+        assert_eq!(profile2.username, String::from_str(&env, "testuser"));
     }
 }

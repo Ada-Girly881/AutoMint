@@ -153,16 +153,28 @@ impl AMTToken {
 
     pub fn burn(env: Env, from: Address, amount: i128) -> Result<(), TokenError> {
         from.require_auth();
+        
+        // Validate amount is not negative
         if amount < 0 {
             return Err(TokenError::NegativeAmount);
         }
+        
+        // Validate amount is not zero (burning zero is pointless)
+        if amount == 0 {
+            return Ok(()); // No-op for zero amount
+        }
+        
+        // Get current balance and validate it exists and is sufficient
         let balance = Self::balance(env.clone(), from.clone());
         if balance < amount {
             return Err(TokenError::InsufficientBalance);
         }
+        
+        // Perform the burn
         env.storage()
             .persistent()
             .set(&DataKey::Balance(from.clone()), &(balance - amount));
+        
         env.events().publish((symbol_short!("burn"), from), amount);
         Ok(())
     }
@@ -497,4 +509,48 @@ mod test {
             client.try_approve(&alice, &alice, &100_i128, &(env.ledger().sequence() + 1000));
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_burn_zero_amount_is_noop() {
+        let (env, admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        
+        let balance_before = client.balance(&alice);
+        client.burn(&alice, &0_i128);
+        let balance_after = client.balance(&alice);
+        
+        assert_eq!(balance_before, balance_after);
+        assert_eq!(balance_after, 1000_i128);
+    }
+
+    #[test]
+    fn test_burn_negative_amount_fails() {
+        let (env, admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        
+        let result = client.try_burn(&alice, &-100_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_burn_exact_balance() {
+        let (env, admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        
+        client.burn(&alice, &1000_i128);
+        assert_eq!(client.balance(&alice), 0_i128);
+    }
+
+    #[test]
+    fn test_burn_from_zero_balance_fails() {
+        let (env, admin, client) = setup();
+        let alice = Address::generate(&env);
+        
+        let result = client.try_burn(&alice, &100_i128);
+        assert!(result.is_err());
+    }
 }
+
