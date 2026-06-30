@@ -95,6 +95,7 @@ pub enum BotNFTError {
     BotNotFound = 5,
     NotOwner = 6,
     InsufficientFunds = 7,
+    NotInitialized = 8,
 }
 
 const LEDGER_BUMP: u32 = 120960;
@@ -128,6 +129,9 @@ impl BotNFTContract {
     }
 
     pub fn mint_basic(env: Env, owner: Address) -> Result<u64, BotNFTError> {
+        if !env.storage().instance().has(&DataKey::Initialized) {
+            return Err(BotNFTError::NotInitialized);
+        }
         owner.require_auth();
         let bot_id = Self::get_next_id(&env);
         let rate = 10_u64;
@@ -153,6 +157,9 @@ impl BotNFTContract {
     }
 
     pub fn mint_tier(env: Env, owner: Address, tier: Tier, token: Address) -> Result<u64, BotNFTError> {
+        if !env.storage().instance().has(&DataKey::Initialized) {
+            return Err(BotNFTError::NotInitialized);
+        }
         owner.require_auth();
         let price = tier.price();
         if price > 0 {
@@ -291,13 +298,14 @@ impl BotNFTContract {
     }
 
     fn increment_bot_count(env: &Env, user: &Address) {
-        let registry: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Registry)
-            .unwrap();
+        let registry: Address = match env.storage().instance().get(&DataKey::Registry) {
+            Some(r) => r,
+            None => return,
+        };
         let reg_client = automint_registry::RegistryContractClient::new(env, &registry);
-        let _ = reg_client.increment_bot_count(user);
+        // Use the fallible client so a registry-side error (e.g. the owner is
+        // not registered yet) is swallowed rather than panicking the mint.
+        let _ = reg_client.try_increment_bot_count(user);
     }
 }
 
@@ -443,7 +451,64 @@ mod test {
         let (env, _admin, _registry, _token, client) = setup();
         let admin = Address::generate(&env);
         let registry = Address::generate(&env);
-        assert!(client.try_initialize(&admin, &registry).is_err());
+        assert_eq!(
+            client.try_initialize(&admin, &registry),
+            Err(Ok(BotNFTError::AlreadyInitialized))
+        );
+    }
+
+    #[test]
+    fn test_initialize_sets_admin() {
+        let (_env, admin, _registry, _token, client) = setup();
+        assert_eq!(client.admin(), admin);
+    }
+
+    #[test]
+    fn test_mint_basic_before_init_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let owner = Address::generate(&env);
+        assert_eq!(
+            client.try_mint_basic(&owner),
+            Err(Ok(BotNFTError::NotInitialized))
+        );
+    }
+
+    #[test]
+    fn test_mint_basic_sets_basic_tier_and_owner() {
+        let (env, _admin, registry, _token, client) = setup();
+        let owner = Address::generate(&env);
+        register_user(&env, &registry, &owner, "owner");
+        let bot_id = client.mint_basic(&owner);
+        let bot = client.get_bot(&bot_id);
+        assert_eq!(bot.owner, owner);
+        assert!(bot.tier == Tier::Basic);
+    }
+
+    #[test]
+    fn test_mint_basic_increments_registry_count() {
+        let (env, _admin, registry, _token, client) = setup();
+        let owner = Address::generate(&env);
+        register_user(&env, &registry, &owner, "owner");
+        let reg_client =
+            automint_registry::RegistryContractClient::new(&env, &registry);
+        assert_eq!(reg_client.get_user(&owner).bot_count, 0);
+        client.mint_basic(&owner);
+        client.mint_basic(&owner);
+        assert_eq!(reg_client.get_user(&owner).bot_count, 2);
+    }
+
+    #[test]
+    fn test_mint_basic_unregistered_owner_still_mints() {
+        // A registry error (owner not registered) must be swallowed, not
+        // panic the mint.
+        let (env, _admin, _registry, _token, client) = setup();
+        let owner = Address::generate(&env);
+        let bot_id = client.mint_basic(&owner);
+        assert_eq!(bot_id, 1);
+        assert_eq!(client.get_user_bots(&owner).len(), 1);
     }
 
     #[test]
