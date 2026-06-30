@@ -201,15 +201,25 @@ impl RegistryContract {
     }
 
     pub fn decrement_bot_count(env: Env, user: Address) -> Result<(), RegistryError> {
+        user.require_auth();
         let mut profile: UserProfile = env
             .storage()
             .persistent()
             .get(&DataKey::UserProfile(user.clone()))
             .ok_or(RegistryError::NotRegistered)?;
+        // Floor at zero — bot_count is a u32, saturating_sub prevents underflow
         profile.bot_count = profile.bot_count.saturating_sub(1);
         env.storage()
             .persistent()
             .set(&DataKey::UserProfile(user.clone()), &profile);
+        // Extend TTL so the profile doesn't expire around active bot operations
+        env.storage().persistent().extend_ttl(
+            &DataKey::UserProfile(user.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+        env.events()
+            .publish((symbol_short!("dec_bot"), user), profile.bot_count);
         Ok(())
     }
 
@@ -588,14 +598,75 @@ mod test {
         let (env, _admin, client) = setup();
         let ghost = Address::generate(&env);
         let result = client.try_increment_bot_count(&ghost);
-        assert_eq!(result, Ok(Err(RegistryError::NotRegistered)));
+        assert_eq!(result, Err(Ok(RegistryError::NotRegistered)));
     }
 
+    // #95: Exact error variant — unregistered address must return NotRegistered
     #[test]
     fn test_decrement_bot_count_unregistered_fails() {
         let (env, _admin, client) = setup();
         let ghost = Address::generate(&env);
-        assert!(client.try_decrement_bot_count(&ghost).is_err());
+        let result = client.try_decrement_bot_count(&ghost);
+        assert_eq!(result, Err(Ok(RegistryError::NotRegistered)));
+    }
+
+    // #95: Decrement on a fresh (bot_count == 0) profile must floor at zero, not underflow
+    #[test]
+    fn test_decrement_bot_count_floors_at_zero_exact() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "FloorExact"));
+        // Starts at 0 — decrement should leave it at 0
+        client.decrement_bot_count(&user);
+        assert_eq!(client.get_user(&user).bot_count, 0);
+    }
+
+    // #95: Multiple decrements beyond zero all stay at zero
+    #[test]
+    fn test_decrement_bot_count_multiple_below_zero_stays_floored() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "MultiFloor"));
+        client.increment_bot_count(&user); // bot_count == 1
+        client.decrement_bot_count(&user); // bot_count == 0
+        client.decrement_bot_count(&user); // bot_count stays 0
+        client.decrement_bot_count(&user); // bot_count stays 0
+        assert_eq!(client.get_user(&user).bot_count, 0);
+    }
+
+    // #95: Decrement extends TTL (profile still readable; no expiry panic)
+    #[test]
+    fn test_decrement_bot_count_extends_ttl() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "TtlDecrement"));
+        client.increment_bot_count(&user);
+        client.decrement_bot_count(&user);
+        // If TTL was not extended the persistent entry could expire; confirm profile is still readable
+        let profile = client.get_user(&user);
+        assert_eq!(profile.bot_count, 0);
+    }
+
+    // #95: All other profile fields are preserved after decrement
+    #[test]
+    fn test_decrement_bot_count_preserves_other_fields() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        let username = String::from_str(&env, "FieldGuard");
+        client.register(&user, &username);
+        client.add_points(&user, &77_u64);
+        client.add_claimed_amt(&user, &333_i128);
+        client.increment_bot_count(&user);
+        client.increment_bot_count(&user); // bot_count == 2
+
+        client.decrement_bot_count(&user); // bot_count == 1
+
+        let profile = client.get_user(&user);
+        assert_eq!(profile.bot_count, 1);
+        assert_eq!(profile.total_points, 77);
+        assert_eq!(profile.claimed_amt, 333);
+        assert_eq!(profile.username, username);
+        assert_eq!(profile.address, user);
     }
 
     #[test]
