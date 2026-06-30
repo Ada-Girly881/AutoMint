@@ -450,6 +450,24 @@ mod test {
         assert_eq!(client.admin(), admin);
     }
 
+    // Test double-initialization fails with the AlreadyInitialized variant
+    #[test]
+    fn test_double_initialize_fails() {
+        let (env, _admin, client) = setup();
+        let other_admin = Address::generate(&env);
+        assert_eq!(
+            client.try_initialize(&other_admin),
+            Err(Ok(RegistryError::AlreadyInitialized))
+        );
+    }
+
+    // Test initialize stores the admin address in storage
+    #[test]
+    fn test_initialize_sets_admin() {
+        let (_env, admin, client) = setup();
+        assert_eq!(client.admin(), admin);
+    }
+
     // #37: Test admin persists across calls
     #[test]
     fn test_admin_persists() {
