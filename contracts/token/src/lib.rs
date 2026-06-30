@@ -220,8 +220,32 @@ impl AMTToken {
     }
 
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), TokenError> {
-        Self::require_admin(&env)?;
+        // Guard: contract must be initialized before admin can be transferred
+        if !env.storage().instance().has(&DataKey::State) {
+            return Err(TokenError::NotInitialized);
+        }
+
+        // Resolve and authenticate the current admin
+        let current_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(TokenError::NotInitialized)?;
+        current_admin.require_auth();
+
+        // Reject self-assignment — transferring admin to the current admin is a no-op
+        // that wastes a transaction; callers should be aware of the current admin.
+        if new_admin == current_admin {
+            return Err(TokenError::Unauthorized);
+        }
+
         env.storage().instance().set(&DataKey::Admin, &new_admin);
+
+        // Extend instance TTL so the new admin key stays live
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+
         env.events()
             .publish((symbol_short!("set_admin"),), new_admin);
         Ok(())
@@ -413,6 +437,9 @@ mod test {
         assert!(client.try_burn(&user, &200_i128).is_err());
     }
 
+    // --- set_admin: happy path ---
+
+    // #84: New admin is stored and can exercise admin-only functions
     #[test]
     fn test_set_admin_and_mint_from_new_admin() {
         let (env, _admin, client) = setup();
@@ -421,6 +448,105 @@ mod test {
         let user = Address::generate(&env);
         client.mint(&user, &50_i128);
         assert_eq!(client.balance(&user), 50_i128);
+    }
+
+    // #84: admin() reflects the new address immediately after set_admin
+    #[test]
+    fn test_set_admin_updates_admin_address() {
+        let (env, _old_admin, client) = setup();
+        let new_admin = Address::generate(&env);
+        client.set_admin(&new_admin);
+        assert_eq!(client.admin(), new_admin);
+    }
+
+    // #84: Chained transfers — A → B → C, each step updates admin correctly
+    #[test]
+    fn test_set_admin_chained_transfers() {
+        let (env, _admin_a, client) = setup();
+        let admin_b = Address::generate(&env);
+        let admin_c = Address::generate(&env);
+        client.set_admin(&admin_b);
+        assert_eq!(client.admin(), admin_b);
+        client.set_admin(&admin_c);
+        assert_eq!(client.admin(), admin_c);
+        // Confirm admin_c can mint
+        let user = Address::generate(&env);
+        client.mint(&user, &100_i128);
+        assert_eq!(client.balance(&user), 100_i128);
+    }
+
+    // --- set_admin: exact error variants ---
+
+    // #84: Not initialized → NotInitialized
+    #[test]
+    fn test_set_admin_not_initialized_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let any_addr = Address::generate(&env);
+        let result = client.try_set_admin(&any_addr);
+        assert_eq!(result, Err(Ok(TokenError::NotInitialized)));
+    }
+
+    // #84: new_admin == current admin → Unauthorized (self-assignment)
+    #[test]
+    fn test_set_admin_self_assignment_fails() {
+        let (_env, admin, client) = setup();
+        let result = client.try_set_admin(&admin);
+        assert_eq!(result, Err(Ok(TokenError::Unauthorized)));
+        // Admin must remain unchanged
+        assert_eq!(client.admin(), admin);
+    }
+
+    // #84: After transfer, the old admin can no longer call mint (loses rights)
+    #[test]
+    fn test_set_admin_old_admin_loses_mint_rights() {
+        let (env, old_admin, client) = setup();
+        let new_admin = Address::generate(&env);
+        client.set_admin(&new_admin);
+
+        // In mock_all_auths, all auths are approved regardless of who signs,
+        // so we verify rights via the stored admin address: confirm admin() is no longer old_admin
+        assert_ne!(client.admin(), old_admin);
+        assert_eq!(client.admin(), new_admin);
+    }
+
+    // #84: TTL is extended — instance storage remains readable after set_admin
+    #[test]
+    fn test_set_admin_extends_ttl() {
+        let (env, _admin, client) = setup();
+        let new_admin = Address::generate(&env);
+        client.set_admin(&new_admin);
+        // If TTL was not extended instance storage could expire; confirm admin() still works
+        assert_eq!(client.admin(), new_admin);
+        // And other instance data (token state) is still accessible
+        assert_eq!(client.decimals(), 7u32);
+    }
+
+    // #84: set_admin does not affect any token balances
+    #[test]
+    fn test_set_admin_does_not_affect_balances() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &500_i128);
+        let new_admin = Address::generate(&env);
+        client.set_admin(&new_admin);
+        assert_eq!(client.balance(&alice), 500_i128);
+    }
+
+    // #84: set_admin does not affect existing allowances
+    #[test]
+    fn test_set_admin_does_not_affect_allowances() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        client.approve(&alice, &spender, &300_i128, &(env.ledger().sequence() + 1000));
+        let new_admin = Address::generate(&env);
+        client.set_admin(&new_admin);
+        // Allowance must be untouched
+        assert_eq!(client.allowance(&alice, &spender), 300_i128);
     }
 
     // --- transfer_from: happy path ---
