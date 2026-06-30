@@ -736,4 +736,98 @@ mod test {
         assert_eq!(profile1.username, String::from_str(&env, "TestUser"));
         assert_eq!(profile2.username, String::from_str(&env, "testuser"));
     }
+
+    // ── is_registered edge cases (#91) ──────────────────────────────────────
+
+    // #91: Unregistered address returns false
+    #[test]
+    fn test_is_registered_returns_false_for_unregistered() {
+        let (env, _admin, client) = setup();
+        let stranger = Address::generate(&env);
+        assert!(!client.is_registered(&stranger));
+    }
+
+    // #91: Returns true immediately after a successful register() call
+    #[test]
+    fn test_is_registered_returns_true_after_register() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "RegUser"));
+        assert!(client.is_registered(&user));
+    }
+
+    // #91: Transition — false before register, true after
+    #[test]
+    fn test_is_registered_false_before_true_after_register() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        assert!(!client.is_registered(&user));
+        client.register(&user, &String::from_str(&env, "Transition"));
+        assert!(client.is_registered(&user));
+    }
+
+    // #91: Two distinct addresses are independent — registering one does not
+    //      affect the other's registration status
+    #[test]
+    fn test_is_registered_two_addresses_are_independent() {
+        let (env, _admin, client) = setup();
+        let user_a = Address::generate(&env);
+        let user_b = Address::generate(&env);
+        client.register(&user_a, &String::from_str(&env, "AddrA"));
+        assert!(client.is_registered(&user_a));
+        assert!(!client.is_registered(&user_b));
+        client.register(&user_b, &String::from_str(&env, "AddrB"));
+        assert!(client.is_registered(&user_a));
+        assert!(client.is_registered(&user_b));
+    }
+
+    // #91: is_registered is a pure read — calling it multiple times returns
+    //      the same value without mutating state
+    #[test]
+    fn test_is_registered_is_idempotent() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "IdempotentUser"));
+        assert!(client.is_registered(&user));
+        assert!(client.is_registered(&user));
+        assert!(client.is_registered(&user));
+        // Profile data is unchanged after repeated reads
+        let profile = client.get_user(&user);
+        assert_eq!(profile.username, String::from_str(&env, "IdempotentUser"));
+    }
+
+    // #91: Fresh contract (initialized but no registrations) returns false
+    //      for every queried address
+    #[test]
+    fn test_is_registered_false_on_fresh_contract() {
+        let (env, _admin, client) = setup();
+        // Query several distinct addresses — none should be registered
+        for _ in 0..3 {
+            let addr = Address::generate(&env);
+            assert!(!client.is_registered(&addr));
+        }
+    }
+
+    // #91: is_registered correctly tracks multiple users registered in sequence
+    #[test]
+    fn test_is_registered_multiple_users() {
+        let (env, _admin, client) = setup();
+        let users: [Address; 5] = core::array::from_fn(|_| Address::generate(&env));
+        let names = ["u0", "u1", "u2", "u3", "u4"];
+        // Before any registration all return false
+        for u in &users {
+            assert!(!client.is_registered(u));
+        }
+        // Register one by one and confirm each becomes true without affecting others
+        for (i, (u, name)) in users.iter().zip(names.iter()).enumerate() {
+            client.register(u, &String::from_str(&env, name));
+            for (j, v) in users.iter().enumerate() {
+                if j <= i {
+                    assert!(client.is_registered(v));
+                } else {
+                    assert!(!client.is_registered(v));
+                }
+            }
+        }
+    }
 }
