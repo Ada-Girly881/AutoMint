@@ -560,4 +560,3 @@ mod test {
         assert!(client.try_decrement_bot_count(&ghost).is_err());
     }
 }
-
