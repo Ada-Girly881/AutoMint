@@ -96,9 +96,15 @@ impl AMTToken {
         amount: i128,
         expiration_ledger: u32,
     ) -> Result<(), TokenError> {
+        if !env.storage().instance().has(&DataKey::State) {
+            return Err(TokenError::NotInitialized);
+        }
         from.require_auth();
         if amount < 0 {
             return Err(TokenError::NegativeAmount);
+        }
+        if from == spender {
+            return Err(TokenError::Unauthorized);
         }
         let key = DataKey::Allowance(AllowanceKey {
             from: from.clone(),
@@ -147,16 +153,28 @@ impl AMTToken {
 
     pub fn burn(env: Env, from: Address, amount: i128) -> Result<(), TokenError> {
         from.require_auth();
+        
+        // Validate amount is not negative
         if amount < 0 {
             return Err(TokenError::NegativeAmount);
         }
+        
+        // Validate amount is not zero (burning zero is pointless)
+        if amount == 0 {
+            return Ok(()); // No-op for zero amount
+        }
+        
+        // Get current balance and validate it exists and is sufficient
         let balance = Self::balance(env.clone(), from.clone());
         if balance < amount {
             return Err(TokenError::InsufficientBalance);
         }
+        
+        // Perform the burn
         env.storage()
             .persistent()
             .set(&DataKey::Balance(from.clone()), &(balance - amount));
+        
         env.events().publish((symbol_short!("burn"), from), amount);
         Ok(())
     }
@@ -205,9 +223,9 @@ impl AMTToken {
         s.name
     }
 
-    pub fn symbol(env: Env) -> String {
-        let s: TokenState = env.storage().instance().get(&DataKey::State).unwrap();
-        s.symbol
+    pub fn symbol(env: Env) -> Result<String, TokenError> {
+        let s: TokenState = env.storage().instance().get(&DataKey::State).ok_or(TokenError::NotInitialized)?;
+        Ok(s.symbol)
     }
 
     fn require_admin(env: &Env) -> Result<(), TokenError> {
@@ -419,4 +437,108 @@ mod test {
         let result = client.try_transfer_from(&spender, &alice, &bob, &200_i128);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_symbol_returns_correct_symbol() {
+        let (env, _admin, client) = setup();
+        let result = client.symbol();
+        assert_eq!(result, String::from_str(&env, "AMT"));
+    }
+
+    #[test]
+    fn test_symbol_fails_if_not_initialized() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let result = client.try_symbol();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_approve_with_zero_amount() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        client.approve(
+            &alice,
+            &spender,
+            &0_i128,
+            &(env.ledger().sequence() + 1000),
+        );
+        assert_eq!(client.allowance(&alice, &spender), 0);
+    }
+
+    #[test]
+    fn test_approve_self_approval_fails() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let result = client.try_approve(
+            &alice,
+            &alice,
+            &100_i128,
+            &(env.ledger().sequence() + 1000),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_approve_fails_if_not_initialized() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let alice = Address::generate(&env);
+        let result = client.try_approve(
+            &alice,
+            &alice,
+            &100_i128,
+            &(env.ledger().sequence() + 1000),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_burn_zero_amount_is_noop() {
+        let (env, admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        
+        let balance_before = client.balance(&alice);
+        client.burn(&alice, &0_i128);
+        let balance_after = client.balance(&alice);
+        
+        assert_eq!(balance_before, balance_after);
+        assert_eq!(balance_after, 1000_i128);
+    }
+
+    #[test]
+    fn test_burn_negative_amount_fails() {
+        let (env, admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        
+        let result = client.try_burn(&alice, &-100_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_burn_exact_balance() {
+        let (env, admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        
+        client.burn(&alice, &1000_i128);
+        assert_eq!(client.balance(&alice), 0_i128);
+    }
+
+    #[test]
+    fn test_burn_from_zero_balance_fails() {
+        let (env, admin, client) = setup();
+        let alice = Address::generate(&env);
+        
+        let result = client.try_burn(&alice, &100_i128);
+        assert!(result.is_err());
+    }
 }
+
