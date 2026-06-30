@@ -76,22 +76,33 @@ pub struct AccrualContract;
 
 #[contractimpl]
 impl AccrualContract {
-    pub fn initialize(env: Env, admin: Address, points_per_amt: u64) -> Result<(), AccrualError> {
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        points_per_amt: u64,
+    ) -> Result<(), AccrualError> {
         if env.storage().instance().has(&DataKey::Initialized) {
             return Err(AccrualError::AlreadyInitialized);
         }
+
+        admin.require_auth();
+
         env.storage()
             .instance()
             .set(&DataKey::Admin, &admin);
+
         env.storage()
             .instance()
             .set(&DataKey::Config, &Config { points_per_amt });
+
         env.storage()
             .instance()
             .set(&DataKey::Initialized, &true);
+
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+
         Ok(())
     }
 
@@ -150,7 +161,8 @@ impl AccrualContract {
         registry: Address,
     ) -> Result<i128, AccrualError> {
         user.require_auth();
-        let mut accrual: UserAccrual = env
+
+        let accrual: UserAccrual = env
             .storage()
             .persistent()
             .get(&DataKey::UserAccrual(user.clone()))
@@ -166,13 +178,51 @@ impl AccrualContract {
             .get(&DataKey::Config)
             .ok_or(AccrualError::Unauthorized)?;
 
-        let total_points = accrual.total_claimed_points.saturating_add(pending);
-        accrual.total_claimed_points = total_points;
-        accrual.last_claim_ts = current_ts;
+        // Total redeemable points
+        let updated_points = accrual.total_claimed_points.saturating_add(pending);
+
+        // Number of AMT tokens to mint
+        let amt_to_mint = updated_points / config.points_per_amt;
+
+        // Carry forward only leftover points
+        let remaining_points = updated_points % config.points_per_amt;
+
+        let reg_client = automint_registry::RegistryContractClient::new(&env, &registry);
+
+        reg_client
+            .add_points(&user, &pending)
+            .map_err(|_| AccrualError::Unauthorized)?;
+
+        if amt_to_mint > 0 {
+            let token_client = automint_token::AMTTokenClient::new(&env, &token_contract);
+
+            token_client
+                .mint(&user, &(amt_to_mint as i128))
+                .map_err(|_| AccrualError::Unauthorized)?;
+
+            reg_client
+                .add_claimed_amt(&user, &(amt_to_mint as i128))
+                .map_err(|_| AccrualError::Unauthorized)?;
+
+            env.events().publish(
+                (symbol_short!("mint"), user.clone()),
+                amt_to_mint as i128,
+            );
+        }
+
+        // Persist state only after all external calls succeed
+        let updated_accrual = UserAccrual {
+            user: accrual.user,
+            rate: accrual.rate,
+            last_claim_ts: current_ts,
+            total_claimed_points: remaining_points,
+            started_at: accrual.started_at,
+        };
 
         env.storage()
             .persistent()
-            .set(&DataKey::UserAccrual(user.clone()), &accrual);
+            .set(&DataKey::UserAccrual(user.clone()), &updated_accrual);
+
         env.storage()
             .persistent()
             .extend_ttl(
@@ -181,19 +231,9 @@ impl AccrualContract {
                 LEDGER_BUMP,
             );
 
-        let reg_client = automint_registry::RegistryContractClient::new(&env, &registry);
-        let _ = reg_client.add_points(&user, &pending);
-
-        if total_points >= config.points_per_amt as u64 {
-            let amt_to_mint = (total_points / config.points_per_amt as u64) as i128;
-            let token_client = automint_token::AMTTokenClient::new(&env, &token_contract);
-            let _ = token_client.mint(&user, &amt_to_mint);
-            let _ = reg_client.add_claimed_amt(&user, &amt_to_mint);
-        }
-
         env.events().publish(
-            (symbol_short!("claim"), user.clone()),
-            (pending, total_points),
+            (symbol_short!("claim"), user),
+            (pending, remaining_points),
         );
 
         Ok(pending as i128)
