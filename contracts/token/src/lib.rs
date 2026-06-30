@@ -147,6 +147,27 @@ impl AMTToken {
         amount: i128,
     ) -> Result<(), TokenError> {
         spender.require_auth();
+
+        // Reject negative amounts before touching allowance or balances
+        if amount < 0 {
+            return Err(TokenError::NegativeAmount);
+        }
+
+        // Zero-amount transfers are a no-op (no allowance consumed, no state change)
+        if amount == 0 {
+            return Ok(());
+        }
+
+        // spender must be distinct from from — use transfer() for self-initiated moves
+        if spender == from {
+            return Err(TokenError::Unauthorized);
+        }
+
+        // Sending to yourself is always a no-op: reject it to avoid pointless state writes
+        if from == to {
+            return Err(TokenError::Unauthorized);
+        }
+
         Self::spend_allowance(&env, &from, &spender, amount)?;
         Self::do_transfer(&env, &from, &to, amount)
     }
@@ -317,7 +338,7 @@ impl AMTToken {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Env, String};
+    use soroban_sdk::{testutils::{Address as _, Ledger as _}, Env, String};
 
     fn setup() -> (Env, Address, AMTTokenClient<'static>) {
         let env = Env::default();
@@ -402,6 +423,8 @@ mod test {
         assert_eq!(client.balance(&user), 50_i128);
     }
 
+    // --- transfer_from: happy path ---
+
     #[test]
     fn test_approve_and_transfer_from() {
         let (env, _admin, client) = setup();
@@ -421,6 +444,24 @@ mod test {
         assert_eq!(client.allowance(&alice, &spender), 150_i128);
     }
 
+    // #81: Allowance is fully consumed when transfer_from drains it exactly
+    #[test]
+    fn test_transfer_from_consumes_allowance_fully() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        client.approve(&alice, &spender, &500_i128, &(env.ledger().sequence() + 1000));
+        client.transfer_from(&spender, &alice, &bob, &500_i128);
+        assert_eq!(client.allowance(&alice, &spender), 0_i128);
+        assert_eq!(client.balance(&bob), 500_i128);
+        assert_eq!(client.balance(&alice), 500_i128);
+    }
+
+    // --- transfer_from: exact error variants ---
+
+    // #81: Insufficient allowance → InsufficientAllowance
     #[test]
     fn test_transfer_from_insufficient_allowance_fails() {
         let (env, _admin, client) = setup();
@@ -435,7 +476,142 @@ mod test {
             &(env.ledger().sequence() + 1000),
         );
         let result = client.try_transfer_from(&spender, &alice, &bob, &200_i128);
+        assert_eq!(result, Err(Ok(TokenError::InsufficientAllowance)));
+    }
+
+    // #81: Insufficient balance (allowance > balance) → InsufficientBalance
+    #[test]
+    fn test_transfer_from_insufficient_balance_fails() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        let bob = Address::generate(&env);
+        // Give alice only 50 but approve spender for 200
+        client.mint(&alice, &50_i128);
+        client.approve(&alice, &spender, &200_i128, &(env.ledger().sequence() + 1000));
+        let result = client.try_transfer_from(&spender, &alice, &bob, &200_i128);
+        assert_eq!(result, Err(Ok(TokenError::InsufficientBalance)));
+    }
+
+    // #81: Negative amount → NegativeAmount (before allowance is touched)
+    #[test]
+    fn test_transfer_from_negative_amount_fails() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        client.approve(&alice, &spender, &500_i128, &(env.ledger().sequence() + 1000));
+        let allowance_before = client.allowance(&alice, &spender);
+        let result = client.try_transfer_from(&spender, &alice, &bob, &-100_i128);
+        assert_eq!(result, Err(Ok(TokenError::NegativeAmount)));
+        // Allowance must be untouched
+        assert_eq!(client.allowance(&alice, &spender), allowance_before);
+    }
+
+    // #81: Zero amount → Ok(()) no-op (allowance and balances untouched)
+    #[test]
+    fn test_transfer_from_zero_amount_is_noop() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        client.approve(&alice, &spender, &500_i128, &(env.ledger().sequence() + 1000));
+        // Should succeed without consuming allowance or moving tokens
+        client.transfer_from(&spender, &alice, &bob, &0_i128);
+        assert_eq!(client.allowance(&alice, &spender), 500_i128);
+        assert_eq!(client.balance(&alice), 1000_i128);
+        assert_eq!(client.balance(&bob), 0_i128);
+    }
+
+    // #81: spender == from → Unauthorized (must use transfer() instead)
+    #[test]
+    fn test_transfer_from_spender_equals_from_fails() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        // alice tries to use transfer_from as if she were the spender of her own funds
+        let result = client.try_transfer_from(&alice, &alice, &bob, &100_i128);
+        assert_eq!(result, Err(Ok(TokenError::Unauthorized)));
+    }
+
+    // #81: from == to (self-transfer) → Unauthorized
+    #[test]
+    fn test_transfer_from_self_transfer_fails() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        client.approve(&alice, &spender, &500_i128, &(env.ledger().sequence() + 1000));
+        let result = client.try_transfer_from(&spender, &alice, &alice, &100_i128);
+        assert_eq!(result, Err(Ok(TokenError::Unauthorized)));
+        // Allowance must be untouched
+        assert_eq!(client.allowance(&alice, &spender), 500_i128);
+    }
+
+    // #81: Expired allowance → AllowanceExpired
+    #[test]
+    fn test_transfer_from_expired_allowance_fails() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        // Approve with expiration at current ledger (already expired by the time we call)
+        let current_seq = env.ledger().sequence();
+        client.approve(&alice, &spender, &500_i128, &current_seq);
+        // Advance ledger so the allowance is expired
+        env.ledger().set_sequence_number(current_seq + 1);
+        let result = client.try_transfer_from(&spender, &alice, &bob, &100_i128);
+        assert_eq!(result, Err(Ok(TokenError::AllowanceExpired)));
+    }
+
+    // #81: No allowance at all (zero by default) → AllowanceExpired (expiration_ledger == 0 < sequence)
+    #[test]
+    fn test_transfer_from_no_allowance_fails() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        // No approve call — default allowance value has expiration_ledger == 0
+        let result = client.try_transfer_from(&spender, &alice, &bob, &100_i128);
         assert!(result.is_err());
+    }
+
+    // #81: Negative amount rejected before allowance is checked (no allowance needed)
+    #[test]
+    fn test_transfer_from_negative_amount_rejected_before_allowance_check() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        // No allowance set at all — NegativeAmount must fire first
+        let result = client.try_transfer_from(&spender, &alice, &bob, &-1_i128);
+        assert_eq!(result, Err(Ok(TokenError::NegativeAmount)));
+    }
+
+    // #81: Multiple sequential transfer_from calls each decrement allowance correctly
+    #[test]
+    fn test_transfer_from_multiple_calls_decrements_allowance() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        client.approve(&alice, &spender, &300_i128, &(env.ledger().sequence() + 1000));
+        client.transfer_from(&spender, &alice, &bob, &100_i128);
+        assert_eq!(client.allowance(&alice, &spender), 200_i128);
+        client.transfer_from(&spender, &alice, &bob, &100_i128);
+        assert_eq!(client.allowance(&alice, &spender), 100_i128);
+        client.transfer_from(&spender, &alice, &bob, &100_i128);
+        assert_eq!(client.allowance(&alice, &spender), 0_i128);
+        // Fourth call should now fail — allowance exhausted
+        let result = client.try_transfer_from(&spender, &alice, &bob, &1_i128);
+        assert_eq!(result, Err(Ok(TokenError::InsufficientAllowance)));
     }
 
     #[test]
@@ -500,7 +676,7 @@ mod test {
 
     #[test]
     fn test_burn_zero_amount_is_noop() {
-        let (env, admin, client) = setup();
+        let (env, _admin, client) = setup();
         let alice = Address::generate(&env);
         client.mint(&alice, &1000_i128);
         
@@ -514,7 +690,7 @@ mod test {
 
     #[test]
     fn test_burn_negative_amount_fails() {
-        let (env, admin, client) = setup();
+        let (env, _admin, client) = setup();
         let alice = Address::generate(&env);
         client.mint(&alice, &1000_i128);
         
@@ -524,7 +700,7 @@ mod test {
 
     #[test]
     fn test_burn_exact_balance() {
-        let (env, admin, client) = setup();
+        let (env, _admin, client) = setup();
         let alice = Address::generate(&env);
         client.mint(&alice, &1000_i128);
         
@@ -534,7 +710,7 @@ mod test {
 
     #[test]
     fn test_burn_from_zero_balance_fails() {
-        let (env, admin, client) = setup();
+        let (env, _admin, client) = setup();
         let alice = Address::generate(&env);
         
         let result = client.try_burn(&alice, &100_i128);
