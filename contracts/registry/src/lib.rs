@@ -192,6 +192,11 @@ impl RegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::UserProfile(user.clone()), &profile);
+        env.storage().persistent().extend_ttl(
+            &DataKey::UserProfile(user.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
         Ok(())
     }
 
@@ -440,6 +445,16 @@ mod test {
     }
 
     #[test]
+    fn test_increment_bot_count_from_zero() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "FreshUser"));
+        assert_eq!(client.get_user(&user).bot_count, 0);
+        client.increment_bot_count(&user);
+        assert_eq!(client.get_user(&user).bot_count, 1);
+    }
+
+    #[test]
     fn test_increment_decrement_bot_count() {
         let (env, _admin, client) = setup();
         let user = Address::generate(&env);
@@ -468,6 +483,24 @@ mod test {
     // #37: Test admin function returns correct admin address
     #[test]
     fn test_admin_returns_current_admin() {
+        let (_env, admin, client) = setup();
+        assert_eq!(client.admin(), admin);
+    }
+
+    // Test double-initialization fails with the AlreadyInitialized variant
+    #[test]
+    fn test_double_initialize_fails() {
+        let (env, _admin, client) = setup();
+        let other_admin = Address::generate(&env);
+        assert_eq!(
+            client.try_initialize(&other_admin),
+            Err(Ok(RegistryError::AlreadyInitialized))
+        );
+    }
+
+    // Test initialize stores the admin address in storage
+    #[test]
+    fn test_initialize_sets_admin() {
         let (_env, admin, client) = setup();
         assert_eq!(client.admin(), admin);
     }
@@ -554,7 +587,8 @@ mod test {
     fn test_increment_bot_count_unregistered_fails() {
         let (env, _admin, client) = setup();
         let ghost = Address::generate(&env);
-        assert!(client.try_increment_bot_count(&ghost).is_err());
+        let result = client.try_increment_bot_count(&ghost);
+        assert_eq!(result, Ok(Err(RegistryError::NotRegistered)));
     }
 
     #[test]
@@ -632,5 +666,3 @@ mod test {
         assert_eq!(profile2.username, String::from_str(&env, "testuser"));
     }
 }
-
-
