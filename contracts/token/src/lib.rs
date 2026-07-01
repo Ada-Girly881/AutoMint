@@ -263,13 +263,21 @@ impl AMTToken {
         s.decimal
     }
 
-    pub fn name(env: Env) -> String {
-        let s: TokenState = env.storage().instance().get(&DataKey::State).unwrap();
-        s.name
+    pub fn name(env: Env) -> Result<String, TokenError> {
+        let s: TokenState = env
+            .storage()
+            .instance()
+            .get(&DataKey::State)
+            .ok_or(TokenError::NotInitialized)?;
+        Ok(s.name)
     }
 
     pub fn symbol(env: Env) -> Result<String, TokenError> {
-        let s: TokenState = env.storage().instance().get(&DataKey::State).ok_or(TokenError::NotInitialized)?;
+        let s: TokenState = env
+            .storage()
+            .instance()
+            .get(&DataKey::State)
+            .ok_or(TokenError::NotInitialized)?;
         Ok(s.symbol)
     }
 
@@ -758,16 +766,28 @@ mod test {
     }
 
     #[test]
+    fn test_name_returns_correct_name() {
+        let (env, _admin, client) = setup();
+        let result = client.name();
+        assert_eq!(result, String::from_str(&env, "AutoMint Token"));
+    }
+
+    #[test]
+    fn test_name_fails_if_not_initialized() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let result = client.try_name();
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_approve_with_zero_amount() {
         let (env, _admin, client) = setup();
         let alice = Address::generate(&env);
         let spender = Address::generate(&env);
-        client.approve(
-            &alice,
-            &spender,
-            &0_i128,
-            &(env.ledger().sequence() + 1000),
-        );
+        client.approve(&alice, &spender, &0_i128, &(env.ledger().sequence() + 1000));
         assert_eq!(client.allowance(&alice, &spender), 0);
     }
 
@@ -775,12 +795,8 @@ mod test {
     fn test_approve_self_approval_fails() {
         let (env, _admin, client) = setup();
         let alice = Address::generate(&env);
-        let result = client.try_approve(
-            &alice,
-            &alice,
-            &100_i128,
-            &(env.ledger().sequence() + 1000),
-        );
+        let result =
+            client.try_approve(&alice, &alice, &100_i128, &(env.ledger().sequence() + 1000));
         assert!(result.is_err());
     }
 
@@ -791,12 +807,8 @@ mod test {
         let id = env.register_contract(None, AMTToken);
         let client = AMTTokenClient::new(&env, &id);
         let alice = Address::generate(&env);
-        let result = client.try_approve(
-            &alice,
-            &alice,
-            &100_i128,
-            &(env.ledger().sequence() + 1000),
-        );
+        let result =
+            client.try_approve(&alice, &alice, &100_i128, &(env.ledger().sequence() + 1000));
         assert!(result.is_err());
     }
 

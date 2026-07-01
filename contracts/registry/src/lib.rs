@@ -38,6 +38,7 @@ pub enum RegistryError {
     UsernameTaken = 3,
     NotRegistered = 4,
     Unauthorized = 5,
+    NotInitialized = 6,
 }
 
 const LEDGER_BUMP: u32 = 120960;
@@ -246,6 +247,9 @@ impl RegistryContract {
 
     // Bubble sort in-contract — gas bounded by user count
     pub fn get_leaderboard(env: Env, limit: u32) -> Vec<UserProfile> {
+        if limit == 0 {
+            return Vec::new(&env);
+        }
         let list: Vec<Address> = env
             .storage()
             .instance()
@@ -287,8 +291,11 @@ impl RegistryContract {
             .unwrap_or(0)
     }
 
-    pub fn admin(env: Env) -> Address {
-        env.storage().instance().get(&DataKey::Admin).unwrap()
+    pub fn admin(env: Env) -> Result<Address, RegistryError> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(RegistryError::NotInitialized)
     }
 }
 
@@ -524,6 +531,14 @@ mod test {
         assert_eq!(retrieved_admin1, admin);
         assert_eq!(retrieved_admin2, admin);
         assert_eq!(retrieved_admin1, retrieved_admin2);
+    }
+
+    #[test]
+    fn test_admin_fails_if_not_initialized() {
+        let env = Env::default();
+        let id = env.register_contract(None, RegistryContract);
+        let client = RegistryContractClient::new(&env, &id);
+        assert!(client.try_admin().is_err());
     }
 
     #[test]
@@ -830,4 +845,5 @@ mod test {
             }
         }
     }
+}
 }
