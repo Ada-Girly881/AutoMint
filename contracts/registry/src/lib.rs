@@ -236,6 +236,9 @@ impl RegistryContract {
 
     // Bubble sort in-contract — gas bounded by user count
     pub fn get_leaderboard(env: Env, limit: u32) -> Vec<UserProfile> {
+        if limit == 0 {
+            return Vec::new(&env);
+        }
         let list: Vec<Address> = env
             .storage()
             .instance()
