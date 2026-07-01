@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, token, symbol_short, Address, Env, String,
+    contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, Env, String,
     Vec,
 };
 
@@ -36,30 +36,30 @@ impl Tier {
 impl BotTier {
     pub fn price(&self) -> i128 {
         match self {
-            BotTier::Basic   => 0,
-            BotTier::Bronze  => 500_0000000,
-            BotTier::Silver  => 2000_0000000,
-            BotTier::Gold    => 7500_0000000,
+            BotTier::Basic => 0,
+            BotTier::Bronze => 500_0000000,
+            BotTier::Silver => 2000_0000000,
+            BotTier::Gold => 7500_0000000,
             BotTier::Diamond => 25000_0000000,
         }
     }
 
     pub fn name(&self, env: &Env) -> String {
         match self {
-            BotTier::Basic   => String::from_str(env, "Basic Bot"),
-            BotTier::Bronze  => String::from_str(env, "Bronze Bot"),
-            BotTier::Silver  => String::from_str(env, "Silver Bot"),
-            BotTier::Gold    => String::from_str(env, "Gold Bot"),
+            BotTier::Basic => String::from_str(env, "Basic Bot"),
+            BotTier::Bronze => String::from_str(env, "Bronze Bot"),
+            BotTier::Silver => String::from_str(env, "Silver Bot"),
+            BotTier::Gold => String::from_str(env, "Gold Bot"),
             BotTier::Diamond => String::from_str(env, "Diamond Bot"),
         }
     }
 
     pub fn rate(&self) -> u64 {
         match self {
-            BotTier::Basic   => 1,
-            BotTier::Bronze  => 5,
-            BotTier::Silver  => 25,
-            BotTier::Gold    => 100,
+            BotTier::Basic => 1,
+            BotTier::Bronze => 5,
+            BotTier::Silver => 25,
+            BotTier::Gold => 100,
             BotTier::Diamond => 500,
         }
     }
@@ -112,18 +112,10 @@ impl BotNFTContract {
         if env.storage().instance().has(&DataKey::Initialized) {
             return Err(BotNFTError::AlreadyInitialized);
         }
-        env.storage()
-            .instance()
-            .set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::NextId, &1u64);
-        env.storage()
-            .instance()
-            .set(&DataKey::Initialized, &true);
-        env.storage()
-            .instance()
-            .set(&DataKey::Registry, &registry);
+        env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::NextId, &1u64);
+        env.storage().instance().set(&DataKey::Initialized, &true);
+        env.storage().instance().set(&DataKey::Registry, &registry);
         env.storage()
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
@@ -147,11 +139,9 @@ impl BotNFTContract {
             name,
         };
         env.storage().persistent().set(&DataKey::Bot(bot_id), &bot);
-        env.storage().persistent().extend_ttl(
-            &DataKey::Bot(bot_id),
-            LEDGER_THRESHOLD,
-            LEDGER_BUMP,
-        );
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Bot(bot_id), LEDGER_THRESHOLD, LEDGER_BUMP);
         Self::add_bot_to_user(&env, &owner, bot_id);
         Self::increment_bot_count(&env, &owner);
         env.events().publish(
@@ -236,10 +226,8 @@ impl BotNFTContract {
         Self::remove_bot_from_user(&env, &from, bot_id);
         Self::add_bot_to_user(&env, &to, bot_id);
 
-        env.events().publish(
-            (symbol_short!("transfer"), from, to.clone()),
-            bot_id,
-        );
+        env.events()
+            .publish((symbol_short!("transfer"), from, to.clone()), bot_id);
         Ok(())
     }
 
@@ -273,14 +261,8 @@ impl BotNFTContract {
     }
 
     fn get_next_id(env: &Env) -> u64 {
-        let id: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::NextId)
-            .unwrap_or(1);
-        env.storage()
-            .instance()
-            .set(&DataKey::NextId, &(id + 1));
+        let id: u64 = env.storage().instance().get(&DataKey::NextId).unwrap_or(1);
+        env.storage().instance().set(&DataKey::NextId, &(id + 1));
         id
     }
 
@@ -289,7 +271,7 @@ impl BotNFTContract {
             .storage()
             .persistent()
             .get::<_, Vec<u64>>(&DataKey::UserBots(user.clone()))
-            .unwrap_or_else(|| Vec::new(&env));
+            .unwrap_or_else(|| Vec::new(env));
         bots.push_back(bot_id);
         env.storage()
             .persistent()
@@ -297,12 +279,12 @@ impl BotNFTContract {
     }
 
     fn remove_bot_from_user(env: &Env, user: &Address, bot_id: u64) {
-        let mut bots = env
+        let bots = env
             .storage()
             .persistent()
             .get::<_, Vec<u64>>(&DataKey::UserBots(user.clone()))
-            .unwrap_or_else(|| Vec::new(&env));
-        let mut new_bots = Vec::new(&env);
+            .unwrap_or_else(|| Vec::new(env));
+        let mut new_bots = Vec::new(env);
         for id in bots.iter() {
             if id != bot_id {
                 new_bots.push_back(id);
@@ -313,11 +295,11 @@ impl BotNFTContract {
             .set(&DataKey::UserBots(user.clone()), &new_bots);
     }
 
-    pub fn admin(env: Env) -> Address {
+    pub fn admin(env: Env) -> Result<Address, BotNFTError> {
         env.storage()
             .instance()
             .get(&DataKey::Admin)
-            .unwrap()
+            .ok_or(BotNFTError::NotInitialized)
     }
 
     fn increment_bot_count(env: &Env, user: &Address) {
@@ -337,17 +319,18 @@ mod test {
     use super::*;
     use soroban_sdk::{testutils::Address as _, Env, String};
 
-    fn register_user(
-        env: &Env,
-        registry: &Address,
-        user: &Address,
-        name: &str,
-    ) {
+    fn register_user(env: &Env, registry: &Address, user: &Address, name: &str) {
         let reg_client = automint_registry::RegistryContractClient::new(env, registry);
         let _ = reg_client.register(user, &String::from_str(env, name));
     }
 
-    fn setup() -> (Env, Address, Address, Address, BotNFTContractClient<'static>) {
+    fn setup() -> (
+        Env,
+        Address,
+        Address,
+        Address,
+        BotNFTContractClient<'static>,
+    ) {
         let env = Env::default();
         env.mock_all_auths();
         let id = env.register_contract(None, BotNFTContract);
@@ -622,30 +605,50 @@ mod test {
     }
 
     #[test]
+    fn test_admin_fails_if_not_initialized() {
+        let env = Env::default();
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        assert!(client.try_admin().is_err());
+    }
+
+    #[test]
     fn test_bot_tier_prices() {
-        assert_eq!(BotTier::Basic.price(),   0);
-        assert_eq!(BotTier::Bronze.price(),  500_0000000);
-        assert_eq!(BotTier::Silver.price(),  2000_0000000);
-        assert_eq!(BotTier::Gold.price(),    7500_0000000);
+        assert_eq!(BotTier::Basic.price(), 0);
+        assert_eq!(BotTier::Bronze.price(), 500_0000000);
+        assert_eq!(BotTier::Silver.price(), 2000_0000000);
+        assert_eq!(BotTier::Gold.price(), 7500_0000000);
         assert_eq!(BotTier::Diamond.price(), 25000_0000000);
     }
 
     #[test]
     fn test_bot_tier_names() {
         let env = Env::default();
-        assert_eq!(BotTier::Basic.name(&env),   String::from_str(&env, "Basic Bot"));
-        assert_eq!(BotTier::Bronze.name(&env),  String::from_str(&env, "Bronze Bot"));
-        assert_eq!(BotTier::Silver.name(&env),  String::from_str(&env, "Silver Bot"));
-        assert_eq!(BotTier::Gold.name(&env),    String::from_str(&env, "Gold Bot"));
-        assert_eq!(BotTier::Diamond.name(&env), String::from_str(&env, "Diamond Bot"));
+        assert_eq!(
+            BotTier::Basic.name(&env),
+            String::from_str(&env, "Basic Bot")
+        );
+        assert_eq!(
+            BotTier::Bronze.name(&env),
+            String::from_str(&env, "Bronze Bot")
+        );
+        assert_eq!(
+            BotTier::Silver.name(&env),
+            String::from_str(&env, "Silver Bot")
+        );
+        assert_eq!(BotTier::Gold.name(&env), String::from_str(&env, "Gold Bot"));
+        assert_eq!(
+            BotTier::Diamond.name(&env),
+            String::from_str(&env, "Diamond Bot")
+        );
     }
 
     #[test]
     fn test_bot_tier_rates() {
-        assert_eq!(BotTier::Basic.rate(),   1);
-        assert_eq!(BotTier::Bronze.rate(),  5);
-        assert_eq!(BotTier::Silver.rate(),  25);
-        assert_eq!(BotTier::Gold.rate(),    100);
+        assert_eq!(BotTier::Basic.rate(), 1);
+        assert_eq!(BotTier::Bronze.rate(), 5);
+        assert_eq!(BotTier::Silver.rate(), 25);
+        assert_eq!(BotTier::Gold.rate(), 100);
         assert_eq!(BotTier::Diamond.rate(), 500);
     }
 
@@ -693,6 +696,7 @@ mod test {
         assert_eq!(BotNFTError::BotNotFound as u32, 5);
         assert_eq!(BotNFTError::NotOwner as u32, 6);
         assert_eq!(BotNFTError::InsufficientFunds as u32, 7);
+        assert_eq!(BotNFTError::NotInitialized as u32, 8);
     }
 
     #[test]

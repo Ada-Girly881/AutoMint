@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env,
 };
 
 #[derive(Clone)]
@@ -35,19 +35,7 @@ fn read_accrual_state(env: &Env, user: &Address) -> Option<AccrualState> {
         })
 }
 
-fn write_accrual_state(env: &Env, user: &Address, state: AccrualState) {
-    if let Some(mut accrual) = env
-        .storage()
-        .persistent()
-        .get::<_, UserAccrual>(&DataKey::UserAccrual(user.clone()))
-    {
-        accrual.last_claim_ts = state.last_claim_ts;
-        accrual.total_claimed_points = state.total_claimed_points;
-        env.storage()
-            .persistent()
-            .set(&DataKey::UserAccrual(user.clone()), &accrual);
-    }
-}
+
 
 #[derive(Clone)]
 #[contracttype]
@@ -107,13 +95,13 @@ impl AccrualContract {
         Ok(())
     }
 
-    pub fn start_accrual(
-        env: Env,
-        user: Address,
-        rate: u64,
-    ) -> Result<(), AccrualError> {
+    pub fn start_accrual(env: Env, user: Address, rate: u64) -> Result<(), AccrualError> {
         user.require_auth();
-        if env.storage().persistent().has(&DataKey::UserAccrual(user.clone())) {
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::UserAccrual(user.clone()))
+        {
             return Err(AccrualError::AlreadyStarted);
         }
         let accrual = UserAccrual {
@@ -126,13 +114,11 @@ impl AccrualContract {
         env.storage()
             .persistent()
             .set(&DataKey::UserAccrual(user.clone()), &accrual);
-        env.storage()
-            .persistent()
-            .extend_ttl(
-                &DataKey::UserAccrual(user.clone()),
-                LEDGER_THRESHOLD,
-                LEDGER_BUMP,
-            );
+        env.storage().persistent().extend_ttl(
+            &DataKey::UserAccrual(user.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
         env.events().publish(
             (symbol_short!("start"), user.clone()),
             env.ledger().timestamp(),
@@ -221,15 +207,22 @@ impl AccrualContract {
 
         env.storage()
             .persistent()
-            .set(&DataKey::UserAccrual(user.clone()), &updated_accrual);
+            .set(&DataKey::UserAccrual(user.clone()), &accrual);
+        env.storage().persistent().extend_ttl(
+            &DataKey::UserAccrual(user.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
 
-        env.storage()
-            .persistent()
-            .extend_ttl(
-                &DataKey::UserAccrual(user.clone()),
-                LEDGER_THRESHOLD,
-                LEDGER_BUMP,
-            );
+        let reg_client = automint_registry::RegistryContractClient::new(&env, &registry);
+        reg_client.add_points(&user, &pending);
+
+        if total_points >= config.points_per_amt {
+            let amt_to_mint = (total_points / config.points_per_amt) as i128;
+            let token_client = automint_token::AMTTokenClient::new(&env, &token_contract);
+            token_client.mint(&user, &amt_to_mint);
+            reg_client.add_claimed_amt(&user, &amt_to_mint);
+        }
 
         env.events().publish(
             (symbol_short!("claim"), user),
@@ -240,10 +233,7 @@ impl AccrualContract {
     }
 
     pub fn admin(env: Env) -> Address {
-        env.storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .unwrap()
+        env.storage().instance().get(&DataKey::Admin).unwrap()
     }
 
     pub fn config(env: Env) -> Result<Config, AccrualError> {
@@ -259,17 +249,18 @@ mod test {
     use super::*;
     use soroban_sdk::{testutils::Address as _, testutils::Ledger, Env, String};
 
-    fn register_user(
-        env: &Env,
-        registry: &Address,
-        user: &Address,
-        name: &str,
-    ) {
+    fn register_user(env: &Env, registry: &Address, user: &Address, name: &str) {
         let reg_client = automint_registry::RegistryContractClient::new(env, registry);
         let _ = reg_client.register(user, &String::from_str(env, name));
     }
 
-    fn setup() -> (Env, Address, Address, Address, AccrualContractClient<'static>) {
+    fn setup() -> (
+        Env,
+        Address,
+        Address,
+        Address,
+        AccrualContractClient<'static>,
+    ) {
         let env = Env::default();
         env.mock_all_auths();
         let id = env.register_contract(None, AccrualContract);
@@ -304,6 +295,16 @@ mod test {
     fn test_double_initialize_fails() {
         let (env, _admin, _registry, _token, client) = setup();
         assert!(client.try_initialize(&_admin, &100_u64).is_err());
+    }
+
+    #[test]
+    fn test_initialize_zero_points_per_amt_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, AccrualContract);
+        let client = AccrualContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        assert!(client.try_initialize(&admin, &0_u64).is_err());
     }
 
     #[test]
@@ -415,9 +416,7 @@ mod test {
     fn test_claim_not_started_fails() {
         let (env, _admin, registry, token, client) = setup();
         let user = Address::generate(&env);
-        assert!(client
-            .try_claim(&user, &token, &registry)
-            .is_err());
+        assert!(client.try_claim(&user, &token, &registry).is_err());
     }
 
     #[test]
@@ -465,7 +464,9 @@ mod test {
         client.start_accrual(&user, &3600_u64);
 
         // Advance time so pending_points > 0, but don't claim (avoids cross-contract auth)
-        env.ledger().with_mut(|l| { l.timestamp += 7200; });
+        env.ledger().with_mut(|l| {
+            l.timestamp += 7200;
+        });
 
         let state = client.get_accrual_state(&user).unwrap();
         assert_eq!(state.total_claimed_points, 0);
@@ -505,7 +506,9 @@ mod test {
         register_user(&env, &registry, &user, "noelapsed");
         client.start_accrual(&user, &100_u64);
 
-        env.ledger().with_mut(|l| { l.timestamp += 100; });
+        env.ledger().with_mut(|l| {
+            l.timestamp += 100;
+        });
         let _ = client.claim(&user, &token, &registry);
         let pending2 = client.claim(&user, &token, &registry);
         assert_eq!(pending2, 0);
