@@ -66,6 +66,9 @@ impl AMTToken {
         if env.storage().instance().has(&DataKey::State) {
             return Err(TokenError::AlreadyInitialized);
         }
+        if decimal == 0 {
+            return Err(TokenError::NegativeAmount);
+        }
         let state = TokenState {
             decimal,
             name,
@@ -136,6 +139,19 @@ impl AMTToken {
 
     pub fn transfer(env: Env, from: Address, to: Address, amount: i128) -> Result<(), TokenError> {
         from.require_auth();
+
+        if amount < 0 {
+            return Err(TokenError::NegativeAmount);
+        }
+
+        if amount == 0 {
+            return Ok(());
+        }
+
+        if from == to {
+            return Err(TokenError::Unauthorized);
+        }
+
         Self::do_transfer(&env, &from, &to, amount)
     }
 
@@ -251,16 +267,20 @@ impl AMTToken {
         Ok(())
     }
 
-    pub fn admin(env: Env) -> Address {
+    pub fn admin(env: Env) -> Result<Address, TokenError> {
         env.storage()
             .instance()
             .get::<_, Address>(&DataKey::Admin)
-            .unwrap()
+            .ok_or(TokenError::NotInitialized)
     }
 
-    pub fn decimals(env: Env) -> u32 {
-        let s: TokenState = env.storage().instance().get(&DataKey::State).unwrap();
-        s.decimal
+    pub fn decimals(env: Env) -> Result<u32, TokenError> {
+        let s: TokenState = env
+            .storage()
+            .instance()
+            .get(&DataKey::State)
+            .ok_or(TokenError::NotInitialized)?;
+        Ok(s.decimal)
     }
 
     pub fn name(env: Env) -> Result<String, TokenError> {
@@ -850,8 +870,106 @@ mod test {
     fn test_burn_from_zero_balance_fails() {
         let (env, _admin, client) = setup();
         let alice = Address::generate(&env);
-        
+
         let result = client.try_burn(&alice, &100_i128);
+        assert!(result.is_err());
+    }
+
+    // --- Issue #76: initialize validation tests ---
+
+    #[test]
+    fn test_initialize_zero_decimal_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        let result = client.try_initialize(
+            &admin,
+            &0u32,
+            &String::from_str(&env, "AutoMint Token"),
+            &String::from_str(&env, "AMT"),
+        );
+        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::NegativeAmount)));
+    }
+
+    // --- Issue #80: transfer validation tests ---
+
+    #[test]
+    fn test_transfer_zero_amount_is_noop() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+
+        let balance_alice_before = client.balance(&alice);
+        let balance_bob_before = client.balance(&bob);
+        client.transfer(&alice, &bob, &0_i128);
+
+        assert_eq!(client.balance(&alice), balance_alice_before);
+        assert_eq!(client.balance(&bob), balance_bob_before);
+    }
+
+    #[test]
+    fn test_transfer_self_transfer_fails() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+
+        let result = client.try_transfer(&alice, &alice, &100_i128);
+        assert_eq!(result, Err(Ok(TokenError::Unauthorized)));
+        // Balance must remain unchanged
+        assert_eq!(client.balance(&alice), 1000_i128);
+    }
+
+    #[test]
+    fn test_transfer_negative_amount_fails() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+
+        let result = client.try_transfer(&alice, &bob, &-100_i128);
+        assert_eq!(result, Err(Ok(TokenError::NegativeAmount)));
+        // Balances must remain unchanged
+        assert_eq!(client.balance(&alice), 1000_i128);
+        assert_eq!(client.balance(&bob), 0_i128);
+    }
+
+    // --- Issue #85: admin() Result validation tests ---
+
+    #[test]
+    fn test_admin_returns_address_after_initialize() {
+        let (_env, admin, client) = setup();
+        assert_eq!(client.admin(), admin);
+    }
+
+    #[test]
+    fn test_admin_not_initialized_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let result = client.try_admin();
+        assert!(result.is_err());
+    }
+
+    // --- Issue #86: decimals() Result validation tests ---
+
+    #[test]
+    fn test_decimals_returns_value_after_initialize() {
+        let (_env, _admin, client) = setup();
+        assert_eq!(client.decimals(), 7u32);
+    }
+
+    #[test]
+    fn test_decimals_not_initialized_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let result = client.try_decimals();
         assert!(result.is_err());
     }
 }
