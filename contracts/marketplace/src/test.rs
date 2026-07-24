@@ -180,3 +180,130 @@ fn test_active_listings_empty_initially() {
     let h = setup();
     assert_eq!(h.mkt.get_active_listings().len(), 0);
 }
+
+// ─── cancel_listing tests ────────────────────────────────────────────────────
+
+#[test]
+fn test_cancel_listing_returns_bot_to_seller() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let bot_id = h.bot.mint_basic(&seller);
+
+    let listing_id = h
+        .mkt
+        .list_bot(&seller, &bot_id, &10_0000000_i128, &h.token.address);
+
+    // Bot should be held by the marketplace.
+    assert_eq!(h.bot.get_bot(&bot_id).owner, h.mkt.address);
+    assert_eq!(h.bot.get_user_bots(&seller).len(), 0);
+
+    h.mkt.cancel_listing(&seller, &listing_id);
+
+    // Bot must be back with the seller.
+    assert_eq!(h.bot.get_bot(&bot_id).owner, seller);
+    assert_eq!(h.bot.get_user_bots(&seller).len(), 1);
+}
+
+#[test]
+fn test_cancel_listing_marks_inactive() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let bot_id = h.bot.mint_basic(&seller);
+
+    let listing_id = h
+        .mkt
+        .list_bot(&seller, &bot_id, &10_0000000_i128, &h.token.address);
+
+    h.mkt.cancel_listing(&seller, &listing_id);
+
+    let listing = h.mkt.get_listing(&listing_id);
+    assert!(!listing.active);
+}
+
+#[test]
+fn test_cancel_listing_removes_from_active_listings() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let bot_id = h.bot.mint_basic(&seller);
+
+    let listing_id = h
+        .mkt
+        .list_bot(&seller, &bot_id, &10_0000000_i128, &h.token.address);
+
+    assert_eq!(h.mkt.get_active_listings().len(), 1);
+    h.mkt.cancel_listing(&seller, &listing_id);
+    assert_eq!(h.mkt.get_active_listings().len(), 0);
+}
+
+#[test]
+fn test_cancel_listing_only_removes_target_from_active_listings() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let bot_id1 = h.bot.mint_basic(&seller);
+    let bot_id2 = h.bot.mint_basic(&seller);
+
+    let listing_id1 = h
+        .mkt
+        .list_bot(&seller, &bot_id1, &10_0000000_i128, &h.token.address);
+    let listing_id2 = h
+        .mkt
+        .list_bot(&seller, &bot_id2, &20_0000000_i128, &h.token.address);
+
+    h.mkt.cancel_listing(&seller, &listing_id1);
+
+    // Only the second listing should remain active.
+    let active = h.mkt.get_active_listings();
+    assert_eq!(active.len(), 1);
+    assert_eq!(active.get(0).unwrap().id, listing_id2);
+}
+
+#[test]
+fn test_cancel_listing_not_found() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    assert_eq!(
+        h.mkt.try_cancel_listing(&seller, &999_u64),
+        Err(Ok(MarketplaceError::ListingNotFound))
+    );
+}
+
+#[test]
+fn test_cancel_listing_wrong_seller_unauthorized() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let stranger = Address::generate(&h.env);
+    let bot_id = h.bot.mint_basic(&seller);
+
+    let listing_id = h
+        .mkt
+        .list_bot(&seller, &bot_id, &10_0000000_i128, &h.token.address);
+
+    assert_eq!(
+        h.mkt.try_cancel_listing(&stranger, &listing_id),
+        Err(Ok(MarketplaceError::Unauthorized))
+    );
+
+    // Listing must still be active after the failed cancel.
+    assert!(h.mkt.get_listing(&listing_id).active);
+    // Bot must still be escrowed in the marketplace.
+    assert_eq!(h.bot.get_bot(&bot_id).owner, h.mkt.address);
+}
+
+#[test]
+fn test_cancel_listing_already_cancelled() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let bot_id = h.bot.mint_basic(&seller);
+
+    let listing_id = h
+        .mkt
+        .list_bot(&seller, &bot_id, &10_0000000_i128, &h.token.address);
+
+    h.mkt.cancel_listing(&seller, &listing_id);
+
+    // A second cancel must fail with ListingNotActive.
+    assert_eq!(
+        h.mkt.try_cancel_listing(&seller, &listing_id),
+        Err(Ok(MarketplaceError::ListingNotActive))
+    );
+}
