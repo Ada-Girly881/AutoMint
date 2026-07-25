@@ -8,7 +8,7 @@ import type { BotNFT } from "@/types";
 
 interface BotCardProps {
   bot: BotNFT;
-  onListForSale?: (botId: number) => void;
+  onListForSale?: (botId: bigint) => void;
 }
 
 function formatDate(timestamp: number): string {
