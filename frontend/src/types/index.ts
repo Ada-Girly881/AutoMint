@@ -56,3 +56,7 @@ export const BOT_TIER_BG_COLORS: Record<BotTier, string> = {
   Gold: "bg-tier-gold/20",
   Diamond: "bg-tier-diamond/20",
 };
+export interface AccrualState {
+  last_claim_ts: bigint;
+  total_claimed_points: bigint;
+}

@@ -10,9 +10,10 @@ import {
   BOT_NFT_CONTRACT_ID,
   MARKETPLACE_CONTRACT_ID,
   TOKEN_CONTRACT_ID,
+  ACCRUAL_CONTRACT_ID,
 } from "./constants";
 import { getServer } from "./stellar";
-import type { BotNFT, UserProfile, BotTier, MarketplaceListing } from "@/types";
+import type { BotNFT, UserProfile, BotTier, MarketplaceListing, AccrualState } from "@/types";
 
 const toBigInt = (v: unknown): bigint =>
   typeof v === "bigint" ? v : BigInt(String(v ?? 0));
@@ -103,6 +104,7 @@ export async function getAmtBalance(userAddress: string): Promise<bigint> {
  * Transfers bot to marketplace contract and creates listing.
  */
 export async function listBot(
+  userAddress: string,
   botId: bigint,
   price: bigint
 ): Promise<string> {
@@ -111,6 +113,9 @@ export async function listBot(
 
   const txBuilder = new TransactionBuilder(
     await server.getAccount((window as any).selectedPublicKey), { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
+  const txBuilder = new SorobanRpc.TransactionBuilder(
+    await server.getAccount(userAddress),
+    100
   )
     .addOperation(
       contract.call(
@@ -203,12 +208,18 @@ export async function mintTierBot(address: string, tier: string, token: string):
  * Cancel a marketplace listing.
  * Returns the bot to the seller's wallet.
  */
-export async function cancelListing(listingId: bigint): Promise<string> {
+export async function cancelListing(
+  userAddress: string,
+  listingId: bigint
+): Promise<string> {
   const server = getServer();
   const contract = new Contract(MARKETPLACE_CONTRACT_ID);
 
   const txBuilder = new TransactionBuilder(
     await server.getAccount((window as any).selectedPublicKey), { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
+  const txBuilder = new SorobanRpc.TransactionBuilder(
+    await server.getAccount(userAddress),
+    100
   )
     .addOperation(
       contract.call(
@@ -304,4 +315,150 @@ export async function getUserListings(
     price: toBigInt(listing.price),
     listed_at: toBigInt(listing.listed_at),
   }));
+}
+
+/**
+ * Register a user in the registry contract.
+ */
+export async function registerUser(userAddress: string, username: string): Promise<string> {
+  const server = getServer();
+  const contract = new Contract(REGISTRY_CONTRACT_ID);
+
+  const txBuilder = new SorobanRpc.TransactionBuilder(
+    await server.getAccount(userAddress),
+    100
+  )
+    .setNetworkPassphrase("Test SDF Network ; September 2015")
+    .addOperation(
+      contract.call("register", nativeToScVal(userAddress, { type: "address" }), nativeToScVal(username, { type: "string" }))
+    )
+    .setTimeout(30)
+    .build();
+
+  return txBuilder.toXDR();
+}
+
+/**
+ * Mint a basic bot from the bot_nft contract.
+ */
+export async function mintBasicBot(userAddress: string): Promise<string> {
+  const server = getServer();
+  const contract = new Contract(BOT_NFT_CONTRACT_ID);
+
+  const txBuilder = new SorobanRpc.TransactionBuilder(
+    await server.getAccount(userAddress),
+    100
+  )
+    .setNetworkPassphrase("Test SDF Network ; September 2015")
+    .addOperation(
+      contract.call("mint_basic", nativeToScVal(userAddress, { type: "address" }))
+    )
+    .setTimeout(30)
+    .build();
+
+  return txBuilder.toXDR();
+}
+
+/**
+ * Start accrual for a user in the accrual contract.
+ */
+export async function startAccrual(userAddress: string, rate: number): Promise<string> {
+  const server = getServer();
+  const contract = new Contract(ACCRUAL_CONTRACT_ID);
+
+  const txBuilder = new SorobanRpc.TransactionBuilder(
+    await server.getAccount(userAddress),
+    100
+  )
+    .setNetworkPassphrase("Test SDF Network ; September 2015")
+    .addOperation(
+      contract.call("start_accrual", nativeToScVal(userAddress, { type: "address" }), nativeToScVal(rate, { type: "u32" }))
+    )
+    .setTimeout(30)
+    .build();
+
+  return txBuilder.toXDR();
+}
+
+/**
+ * Get accrual state for a user from the accrual contract.
+ */
+export async function getAccrualState(userAddress: string): Promise<AccrualState | null> {
+  const server = getServer();
+  const contract = new Contract(ACCRUAL_CONTRACT_ID);
+
+  const result = await server.simulateTransaction(
+    new SorobanRpc.TransactionBuilder(
+      await server.getAccount(userAddress),
+      100
+    )
+      .setNetworkPassphrase("Test SDF Network ; September 2015")
+      .addOperation(contract.call("get_accrual_state", nativeToScVal(userAddress, { type: "address" })))
+      .setTimeout(30)
+      .build()
+  );
+
+  if (
+    result.error ||
+    !result.results ||
+    result.results.length === 0 ||
+    !result.results[0].xdr
+  ) {
+    return null;
+  }
+
+  const resultXdr = xdr.TransactionResult.fromXDR(
+    result.results[0].xdr,
+    "base64"
+  );
+  const stateRaw = scValToNative(resultXdr.result().value());
+
+  if (!stateRaw) {
+    return null;
+  }
+
+  return {
+    last_claim_ts: BigInt(stateRaw.last_claim_ts ?? 0),
+    total_claimed_points: BigInt(stateRaw.total_claimed_points ?? 0),
+  };
+}
+
+/**
+ * Get user profile from the registry contract.
+ */
+export async function getUserProfile(userAddress: string): Promise<UserProfile | null> {
+  const server = getServer();
+  const contract = new Contract(REGISTRY_CONTRACT_ID);
+
+  const result = await server.simulateTransaction(
+    new SorobanRpc.TransactionBuilder(
+      await server.getAccount(userAddress),
+      100
+    )
+      .setNetworkPassphrase("Test SDF Network ; September 2015")
+      .addOperation(contract.call("get_user", nativeToScVal(userAddress, { type: "address" })))
+      .setTimeout(30)
+      .build()
+  );
+
+  if (
+    result.error ||
+    !result.results ||
+    result.results.length === 0 ||
+    !result.results[0].xdr
+  ) {
+    return null;
+  }
+
+  const resultXdr = xdr.TransactionResult.fromXDR(
+    result.results[0].xdr,
+    "base64"
+  );
+  const profileRaw = scValToNative(resultXdr.result().value());
+
+  if (!profileRaw) {
+    return null;
+  }
+
+  return parseUserProfile(profileRaw);
 }
