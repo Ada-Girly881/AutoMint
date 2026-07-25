@@ -168,12 +168,13 @@ impl BotNFTContract {
         // Get the next bot ID
         let bot_id = Self::get_next_id(&env);
         
-        // Map tier to rate
-        let rate = match tier {
-            Tier::Basic => 10_u64,
-            Tier::Advanced => 25_u64,
-            Tier::Premium => 50_u64,
+        // Map Tier to BotTier
+        let bot_tier = match tier {
+            Tier::Basic => BotTier::Basic,
+            Tier::Advanced => BotTier::Bronze,
+            Tier::Premium => BotTier::Silver,
         };
+        let name = bot_tier.name(&env);
         
         // Create and store the bot
         let bot = BotNFT {

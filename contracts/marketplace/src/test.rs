@@ -37,7 +37,7 @@ fn setup() -> Harness<'static> {
 
     let mkt_id = env.register_contract(None, MarketplaceContract);
     let mkt = MarketplaceContractClient::new(&env, &mkt_id);
-    mkt.initialize(&admin, &bot_id);
+    mkt.initialize(&admin, &bot_id, &250u32);
 
     Harness {
         env,
@@ -91,7 +91,7 @@ fn test_list_bot_ids_are_sequential() {
     assert_eq!(l1, 1);
     assert_eq!(l2, 2);
 
-    assert_eq!(h.mkt.get_active_listings().len(), 2);
+    assert_eq!(h.mkt.get_active_listings(&0, &100).len(), 2);
     assert_eq!(h.mkt.get_user_listings(&seller).len(), 2);
 }
 
@@ -162,7 +162,7 @@ fn test_get_listing_not_found() {
 fn test_double_initialize_fails() {
     let h = setup();
     assert_eq!(
-        h.mkt.try_initialize(&h.admin, &h.bot.address),
+        h.mkt.try_initialize(&h.admin, &h.bot.address, &250u32),
         Err(Ok(MarketplaceError::AlreadyInitialized))
     );
 }
@@ -173,10 +173,11 @@ fn test_config_returns_admin_and_bot_nft() {
     let config = h.mkt.config();
     assert_eq!(config.admin, h.admin);
     assert_eq!(config.bot_nft, h.bot.address);
+    assert_eq!(config.fee_bps, 250u32);
 }
 
 #[test]
 fn test_active_listings_empty_initially() {
     let h = setup();
-    assert_eq!(h.mkt.get_active_listings().len(), 0);
+    assert_eq!(h.mkt.get_active_listings(&0, &100).len(), 0);
 }

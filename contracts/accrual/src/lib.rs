@@ -176,19 +176,16 @@ impl AccrualContract {
         let reg_client = automint_registry::RegistryContractClient::new(&env, &registry);
 
         reg_client
-            .add_points(&user, &pending)
-            .map_err(|_| AccrualError::Unauthorized)?;
+            .add_points(&user, &pending);
 
         if amt_to_mint > 0 {
             let token_client = automint_token::AMTTokenClient::new(&env, &token_contract);
 
             token_client
-                .mint(&user, &(amt_to_mint as i128))
-                .map_err(|_| AccrualError::Unauthorized)?;
+                .mint(&user, &(amt_to_mint as i128));
 
             reg_client
-                .add_claimed_amt(&user, &(amt_to_mint as i128))
-                .map_err(|_| AccrualError::Unauthorized)?;
+                .add_claimed_amt(&user, &(amt_to_mint as i128));
 
             env.events().publish(
                 (symbol_short!("mint"), user.clone()),
@@ -207,22 +204,12 @@ impl AccrualContract {
 
         env.storage()
             .persistent()
-            .set(&DataKey::UserAccrual(user.clone()), &accrual);
+            .set(&DataKey::UserAccrual(user.clone()), &updated_accrual);
         env.storage().persistent().extend_ttl(
             &DataKey::UserAccrual(user.clone()),
             LEDGER_THRESHOLD,
             LEDGER_BUMP,
         );
-
-        let reg_client = automint_registry::RegistryContractClient::new(&env, &registry);
-        reg_client.add_points(&user, &pending);
-
-        if total_points >= config.points_per_amt {
-            let amt_to_mint = (total_points / config.points_per_amt) as i128;
-            let token_client = automint_token::AMTTokenClient::new(&env, &token_contract);
-            token_client.mint(&user, &amt_to_mint);
-            reg_client.add_claimed_amt(&user, &amt_to_mint);
-        }
 
         env.events().publish(
             (symbol_short!("claim"), user),
