@@ -48,7 +48,7 @@ export function useMintTierBot() {
 export function useListings() {
   return useQuery({
     queryKey: ["listings"],
-    queryFn: getActiveListings,
+    queryFn: () => getActiveListings(),
     refetchInterval: 30000, // Poll every 30 seconds
     staleTime: 15000,
   });
