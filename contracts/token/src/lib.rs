@@ -82,6 +82,9 @@ impl AMTToken {
         Ok(())
     }
 
+    // Missing records and from == spender (approve() never stores such a pair)
+    // both fall through to the same "no allowance" case below — 0 is the
+    // correct answer for either, not an error.
     pub fn allowance(env: Env, from: Address, spender: Address) -> i128 {
         let key = DataKey::Allowance(AllowanceKey { from, spender });
         if let Some(a) = env.storage().temporary().get::<_, AllowanceValue>(&key) {
@@ -221,6 +224,12 @@ impl AMTToken {
         if amount < 0 {
             return Err(TokenError::NegativeAmount);
         }
+
+        // Zero-amount mints are a no-op — consistent with transfer/burn
+        if amount == 0 {
+            return Ok(());
+        }
+
         let balance = Self::balance(env.clone(), to.clone());
         let new_balance = balance.checked_add(amount).ok_or(TokenError::Overflow)?;
         env.storage()
@@ -971,6 +980,122 @@ mod test {
         let client = AMTTokenClient::new(&env, &id);
         let result = client.try_decimals();
         assert!(result.is_err());
+    }
+
+    // --- Issue #77: allowance() edge case tests ---
+
+    #[test]
+    fn test_allowance_returns_zero_for_missing_record() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        assert_eq!(client.allowance(&alice, &spender), 0);
+    }
+
+    // approve() always rejects from == spender, so this pair can never have a
+    // stored record — the getter must still resolve to 0, not panic.
+    #[test]
+    fn test_allowance_returns_zero_for_self_spender() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        assert_eq!(client.allowance(&alice, &alice), 0);
+    }
+
+    #[test]
+    fn test_allowance_returns_amount_after_approve() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        client.approve(
+            &alice,
+            &spender,
+            &250_i128,
+            &(env.ledger().sequence() + 100),
+        );
+        assert_eq!(client.allowance(&alice, &spender), 250_i128);
+    }
+
+    #[test]
+    fn test_allowance_returns_zero_after_expiration() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        let current = env.ledger().sequence();
+        client.approve(&alice, &spender, &250_i128, &current);
+        env.ledger().set_sequence_number(current + 1);
+        assert_eq!(client.allowance(&alice, &spender), 0);
+    }
+
+    #[test]
+    fn test_allowance_valid_at_exact_expiration_boundary() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        let current = env.ledger().sequence();
+        client.approve(&alice, &spender, &250_i128, &current);
+        // Ledger has not advanced past expiration_ledger yet — still valid
+        assert_eq!(client.allowance(&alice, &spender), 250_i128);
+    }
+
+    #[test]
+    fn test_allowance_reflects_zero_amount_approval() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let spender = Address::generate(&env);
+        client.approve(&alice, &spender, &0_i128, &(env.ledger().sequence() + 100));
+        assert_eq!(client.allowance(&alice, &spender), 0);
+    }
+
+    // --- Issue #83: mint() edge case tests ---
+
+    #[test]
+    fn test_mint_zero_amount_is_noop() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.mint(&user, &1000_i128);
+        let balance_before = client.balance(&user);
+        client.mint(&user, &0_i128);
+        assert_eq!(client.balance(&user), balance_before);
+    }
+
+    #[test]
+    fn test_mint_negative_amount_fails() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        let result = client.try_mint(&user, &-100_i128);
+        assert_eq!(result, Err(Ok(TokenError::NegativeAmount)));
+        assert_eq!(client.balance(&user), 0);
+    }
+
+    #[test]
+    fn test_mint_not_initialized_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let user = Address::generate(&env);
+        let result = client.try_mint(&user, &100_i128);
+        assert_eq!(result, Err(Ok(TokenError::NotInitialized)));
+    }
+
+    #[test]
+    fn test_mint_overflow_fails() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.mint(&user, &i128::MAX);
+        let result = client.try_mint(&user, &1_i128);
+        assert_eq!(result, Err(Ok(TokenError::Overflow)));
+        // Balance must remain unchanged on overflow
+        assert_eq!(client.balance(&user), i128::MAX);
+    }
+
+    #[test]
+    fn test_mint_to_address_with_no_prior_balance_record() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        assert_eq!(client.balance(&user), 0);
+        client.mint(&user, &500_i128);
+        assert_eq!(client.balance(&user), 500_i128);
     }
 }
 

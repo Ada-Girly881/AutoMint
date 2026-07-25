@@ -169,6 +169,9 @@ impl RegistryContract {
             .persistent()
             .get(&DataKey::UserProfile(user.clone()))
             .ok_or(RegistryError::NotRegistered)?;
+        if points == 0 {
+            return Ok(());
+        }
         profile.total_points = profile.total_points.saturating_add(points);
         env.storage()
             .persistent()
@@ -284,6 +287,8 @@ impl RegistryContract {
         result
     }
 
+    // Missing record (queried before initialize()) correctly defaults to 0 —
+    // zero registered users is the true state, not an error.
     pub fn total_users(env: Env) -> u32 {
         env.storage()
             .instance()
@@ -845,5 +850,96 @@ mod test {
             }
         }
     }
-}
+
+    // ── add_points edge cases (#93) ─────────────────────────────────────────
+
+    // #93: Zero points is a no-op — total_points is left untouched
+    #[test]
+    fn test_add_points_zero_is_noop() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "ZeroPoints"));
+        client.add_points(&user, &100_u64);
+        client.add_points(&user, &0_u64);
+        assert_eq!(client.get_user(&user).total_points, 100);
+    }
+
+    // #93: Missing record — unregistered address must return NotRegistered, not panic
+    #[test]
+    fn test_add_points_unregistered_returns_not_registered() {
+        let (env, _admin, client) = setup();
+        let ghost = Address::generate(&env);
+        let result = client.try_add_points(&ghost, &100_u64);
+        assert_eq!(result, Err(Ok(RegistryError::NotRegistered)));
+    }
+
+    // #93: total_points saturates at u64::MAX instead of overflowing/panicking
+    #[test]
+    fn test_add_points_saturates_at_max() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "MaxPoints"));
+        client.add_points(&user, &u64::MAX);
+        client.add_points(&user, &1_u64);
+        assert_eq!(client.get_user(&user).total_points, u64::MAX);
+    }
+
+    // #93: Repeated accumulation across many calls sums correctly
+    #[test]
+    fn test_add_points_multiple_calls_accumulate_correctly() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "MultiPoints"));
+        for _ in 0..5 {
+            client.add_points(&user, &10_u64);
+        }
+        assert_eq!(client.get_user(&user).total_points, 50);
+    }
+
+    // ── total_users edge cases (#98) ────────────────────────────────────────
+
+    // #98: Missing record — querying before initialize() must return 0, not panic
+    #[test]
+    fn test_total_users_zero_when_uninitialized() {
+        let env = Env::default();
+        let id = env.register_contract(None, RegistryContract);
+        let client = RegistryContractClient::new(&env, &id);
+        assert_eq!(client.total_users(), 0);
+    }
+
+    // #98: A failed (duplicate) registration attempt must not inflate the counter
+    #[test]
+    fn test_total_users_unaffected_by_failed_duplicate_registration() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "Original"));
+        assert_eq!(client.total_users(), 1);
+        let _ = client.try_register(&user, &String::from_str(&env, "Duplicate"));
+        assert_eq!(client.total_users(), 1);
+    }
+
+    // #98: A failed (username collision) registration attempt must not inflate the counter
+    #[test]
+    fn test_total_users_unaffected_by_username_collision() {
+        let (env, _admin, client) = setup();
+        let user1 = Address::generate(&env);
+        let user2 = Address::generate(&env);
+        client.register(&user1, &String::from_str(&env, "Taken"));
+        assert_eq!(client.total_users(), 1);
+        let _ = client.try_register(&user2, &String::from_str(&env, "Taken"));
+        assert_eq!(client.total_users(), 1);
+    }
+
+    // #98: Point/bot-count/claimed-amount mutations do not affect the user count
+    #[test]
+    fn test_total_users_unaffected_by_profile_mutations() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "Mutator"));
+        assert_eq!(client.total_users(), 1);
+        client.add_points(&user, &100_u64);
+        client.add_claimed_amt(&user, &50_i128);
+        client.increment_bot_count(&user);
+        assert_eq!(client.total_users(), 1);
+    }
 }
