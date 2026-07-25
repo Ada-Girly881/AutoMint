@@ -1,10 +1,16 @@
-import { SorobanRpc } from "@stellar/stellar-sdk";
+import {
+  Contract,
+  SorobanRpc,
+  TransactionBuilder,
+  scValToNative,
+  xdr,
+} from "@stellar/stellar-sdk";
 import {
   isConnected as freighterIsConnected,
   requestAccess as freighterRequestAccess,
   getNetwork as freighterGetNetwork,
 } from "@stellar/freighter-api";
-import { SOROBAN_RPC_URL } from "./constants";
+import { SOROBAN_RPC_URL, STELLAR_NETWORK_PASSPHRASE } from "./constants";
 
 /**
  * Module-level singleton — created once, reused on every subsequent call.
@@ -17,6 +23,10 @@ let _server: SorobanRpc.Server | null = null;
  * Returns a memoized {@link SorobanRpc.Server} pointed at the configured
  * {@link SOROBAN_RPC_URL}.  The instance is created on the first call and
  * the same object is returned on every subsequent call.
+ *
+ * @example
+ * const server = getServer();
+ * const account = await server.getAccount(publicKey);
  */
 export function getServer(): SorobanRpc.Server {
   if (!_server) {
@@ -75,7 +85,12 @@ export async function connectFreighter(): Promise<{
       "Freighter wallet extension is not installed or could not be detected."
     );
   }
-  if (connected?.error || !connected?.isConnected) {
+  if (connected?.error) {
+    throw new Error(
+      "Freighter wallet extension is not installed or could not be detected."
+    );
+  }
+  if (!connected?.isConnected) {
     throw new Error(
       "Freighter wallet extension is not installed or could not be detected."
     );
@@ -96,7 +111,7 @@ export async function connectFreighter(): Promise<{
     throw new Error("Freighter did not return a public key.");
   }
 
-  // 3. Fetch the active network (best-effort).
+  // 3. Fetch the active network.
   let network = "";
   try {
     const net = await freighterGetNetwork();
@@ -104,8 +119,50 @@ export async function connectFreighter(): Promise<{
       network = net.network;
     }
   } catch {
-    // A missing network shouldn't block an otherwise successful connection.
+    // Network is best-effort; a missing network shouldn't block a successful
+    // connection. Leave it empty rather than failing the whole flow.
   }
 
   return { publicKey: access.address, network };
+}
+
+/**
+ * Read-only contract simulation helper.
+ *
+ * Builds a transaction that invokes `method(...args)` on `contractId`, submits
+ * it to the RPC's `simulateTransaction`, and decodes the return value to a
+ * native JS value. No signing or submission occurs, so `sourceAddress` only
+ * needs to be a real (loadable) account — it never signs anything.
+ *
+ * @throws Error when the simulation fails or returns no value.
+ */
+export async function simulateContractCall(
+  contractId: string,
+  method: string,
+  args: xdr.ScVal[],
+  sourceAddress: string
+): Promise<unknown> {
+  const server = getServer();
+  const contract = new Contract(contractId);
+  const account = await server.getAccount(sourceAddress);
+
+  const tx = new TransactionBuilder(account, {
+    fee: "100",
+    networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
+  })
+    .addOperation(contract.call(method, ...args))
+    .setTimeout(30)
+    .build();
+
+  const result = await server.simulateTransaction(tx);
+
+  if (SorobanRpc.Api.isSimulationError(result)) {
+    throw new Error(`Simulation failed for ${method}: ${result.error}`);
+  }
+
+  if (!result.result?.retval) {
+    throw new Error(`No return value from simulation of ${method}`);
+  }
+
+  return scValToNative(result.result.retval);
 }
