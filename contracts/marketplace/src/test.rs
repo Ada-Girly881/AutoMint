@@ -37,7 +37,7 @@ fn setup() -> Harness<'static> {
 
     let mkt_id = env.register_contract(None, MarketplaceContract);
     let mkt = MarketplaceContractClient::new(&env, &mkt_id);
-    mkt.initialize(&admin, &bot_id);
+    mkt.initialize(&admin, &bot_id, &250u32);
 
     Harness {
         env,
@@ -91,7 +91,7 @@ fn test_list_bot_ids_are_sequential() {
     assert_eq!(l1, 1);
     assert_eq!(l2, 2);
 
-    assert_eq!(h.mkt.get_active_listings().len(), 2);
+    assert_eq!(h.mkt.get_active_listings(&0, &100).len(), 2);
     assert_eq!(h.mkt.get_user_listings(&seller).len(), 2);
 }
 
@@ -162,7 +162,7 @@ fn test_get_listing_not_found() {
 fn test_double_initialize_fails() {
     let h = setup();
     assert_eq!(
-        h.mkt.try_initialize(&h.admin, &h.bot.address),
+        h.mkt.try_initialize(&h.admin, &h.bot.address, &250u32),
         Err(Ok(MarketplaceError::AlreadyInitialized))
     );
 }
@@ -173,12 +173,47 @@ fn test_config_returns_admin_and_bot_nft() {
     let config = h.mkt.config();
     assert_eq!(config.admin, h.admin);
     assert_eq!(config.bot_nft, h.bot.address);
+    assert_eq!(config.fee_bps, 250u32);
 }
 
 #[test]
 fn test_active_listings_empty_initially() {
     let h = setup();
-    assert_eq!(h.mkt.get_active_listings().len(), 0);
+    assert_eq!(h.mkt.get_active_listings(&0, &100).len(), 0);
+}
+
+#[test]
+fn test_buy_bot_pays_seller_minus_fee_and_transfers_bot() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let buyer = Address::generate(&h.env);
+    let price = 1000_0000000_i128;
+
+    // Fund buyer
+    h.token.mint(&buyer, &price);
+
+    let bot_id = h.bot.mint_basic(&seller);
+    let listing_id = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address);
+
+    let seller_balance_before = h.token.balance(&seller);
+    let admin_balance_before = h.token.balance(&h.admin);
+
+    h.mkt.buy_bot(&buyer, &listing_id);
+
+    // 2.5% fee = 25_0000000, seller gets 975_0000000
+    let fee = price * 25 / 1000;
+    assert_eq!(h.token.balance(&seller), seller_balance_before + price - fee);
+    assert_eq!(h.token.balance(&h.admin), admin_balance_before + fee);
+    assert_eq!(h.token.balance(&buyer), 0);
+
+    // Bot transferred to buyer
+    assert_eq!(h.bot.get_bot(&bot_id).owner, buyer);
+    assert_eq!(h.bot.get_user_bots(&buyer).len(), 1);
+
+    // Listing is now inactive
+    let listing = h.mkt.get_listing(&listing_id);
+    assert!(!listing.active);
+    assert_eq!(h.mkt.get_active_listings(&0, &100).len(), 0);
 }
 
 #[test]
@@ -236,10 +271,10 @@ fn test_buy_bot_inactive_listing_fails() {
 
     h.mkt.buy_bot(&buyer1, &listing_id);
 
-    // Second purchase attempt must fail with ListingInactive
+    // Second purchase attempt must fail with ListingNotActive
     assert_eq!(
         h.mkt.try_buy_bot(&buyer2, &listing_id),
-        Err(Ok(MarketplaceError::ListingInactive))
+        Err(Ok(MarketplaceError::ListingNotActive))
     );
 }
 
@@ -259,6 +294,88 @@ fn test_buy_bot_insufficient_funds_fails() {
 
     assert_eq!(
         h.mkt.try_buy_bot(&buyer, &listing_id),
-        Err(Ok(MarketplaceError::InsufficientFunds))
+        Err(Ok(MarketplaceError::PaymentFailed))
     );
+}
+
+#[test]
+fn test_cancel_listing_returns_bot_to_seller() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let bot_id = h.bot.mint_basic(&seller);
+    let listing_id = h
+        .mkt
+        .list_bot(&seller, &bot_id, &100_0000000_i128, &h.token.address);
+
+    // Bot is escrowed
+    assert_eq!(h.bot.get_bot(&bot_id).owner, h.mkt.address);
+
+    h.mkt.cancel_listing(&seller, &listing_id);
+
+    // Bot returned to seller
+    assert_eq!(h.bot.get_bot(&bot_id).owner, seller);
+    assert_eq!(h.bot.get_user_bots(&seller).len(), 1);
+
+    // Listing is inactive and removed from active list
+    let listing = h.mkt.get_listing(&listing_id);
+    assert!(!listing.active);
+    assert_eq!(h.mkt.get_active_listings(&0, &100).len(), 0);
+}
+
+#[test]
+fn test_buy_inactive_listing_fails() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let buyer = Address::generate(&h.env);
+    let price = 100_0000000_i128;
+
+    h.token.mint(&buyer, &(price * 2));
+    let bot_id = h.bot.mint_basic(&seller);
+    let listing_id = h
+        .mkt
+        .list_bot(&seller, &bot_id, &price, &h.token.address);
+
+    // Cancel the listing first
+    h.mkt.cancel_listing(&seller, &listing_id);
+
+    // Buying a cancelled listing must fail
+    assert_eq!(
+        h.mkt.try_buy_bot(&buyer, &listing_id),
+        Err(Ok(MarketplaceError::ListingNotActive))
+    );
+}
+
+#[test]
+fn test_cancel_already_cancelled_listing_fails() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let bot_id = h.bot.mint_basic(&seller);
+    let listing_id = h
+        .mkt
+        .list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address);
+
+    h.mkt.cancel_listing(&seller, &listing_id);
+
+    assert_eq!(
+        h.mkt.try_cancel_listing(&seller, &listing_id),
+        Err(Ok(MarketplaceError::ListingNotActive))
+    );
+}
+
+#[test]
+fn test_cancel_listing_by_non_seller_fails() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let stranger = Address::generate(&h.env);
+    let bot_id = h.bot.mint_basic(&seller);
+    let listing_id = h
+        .mkt
+        .list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address);
+
+    assert_eq!(
+        h.mkt.try_cancel_listing(&stranger, &listing_id),
+        Err(Ok(MarketplaceError::Unauthorized))
+    );
+    // Listing still active
+    assert!(h.mkt.get_listing(&listing_id).active);
 }
