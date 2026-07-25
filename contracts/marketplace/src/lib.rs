@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, Env, Vec,
 };
 
 use automint_bot_nft::BotNFTContractClient;
@@ -43,6 +43,9 @@ pub enum MarketplaceError {
     InvalidPrice = 3,
     BotTransferFailed = 4,
     ListingNotFound = 5,
+    NotSeller = 6,
+    ListingInactive = 7,
+    InsufficientFunds = 8,
 }
 
 const LEDGER_BUMP: u32 = 120960;
@@ -222,6 +225,76 @@ impl MarketplaceContract {
             .instance()
             .get(&DataKey::Config)
             .ok_or(MarketplaceError::NotInitialized)
+    }
+
+    /// Buy a listed bot. Transfer `price` minus marketplace fee (2.5%) from `buyer`
+    /// to `seller`, transfer fee to `admin`, transfer the escrowed bot to `buyer`,
+    /// and mark the listing inactive.
+    pub fn buy_bot(env: Env, buyer: Address, listing_id: u64) -> Result<(), MarketplaceError> {
+        buyer.require_auth();
+
+        let mut listing: Listing = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Listing(listing_id))
+            .ok_or(MarketplaceError::ListingNotFound)?;
+
+        if !listing.active {
+            return Err(MarketplaceError::ListingInactive);
+        }
+
+        let config: Config = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .ok_or(MarketplaceError::NotInitialized)?;
+
+        // 2.5% fee calculation: fee = price * 250 / 10000
+        let fee = listing
+            .price
+            .checked_mul(250)
+            .unwrap_or(0)
+            .checked_div(10000)
+            .unwrap_or(0);
+        let seller_payment = listing.price.saturating_sub(fee);
+
+        let token_client = token::Client::new(&env, &listing.currency);
+        if token_client
+            .try_transfer(&buyer, &listing.seller, &seller_payment)
+            .is_err()
+        {
+            return Err(MarketplaceError::InsufficientFunds);
+        }
+
+        if fee > 0 {
+            if token_client
+                .try_transfer(&buyer, &config.admin, &fee)
+                .is_err()
+            {
+                return Err(MarketplaceError::InsufficientFunds);
+            }
+        }
+
+        let marketplace = env.current_contract_address();
+        let bot_client = BotNFTContractClient::new(&env, &config.bot_nft);
+        if bot_client
+            .try_transfer(&listing.bot_id, &marketplace, &buyer)
+            .is_err()
+        {
+            return Err(MarketplaceError::BotTransferFailed);
+        }
+
+        listing.active = false;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Listing(listing_id), &listing);
+
+        env.events().publish(
+            (symbol_short!("bought"), buyer, listing_id),
+            (listing.bot_id, listing.price),
+        );
+
+        Ok(())
     }
 }
 
