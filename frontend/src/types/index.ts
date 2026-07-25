@@ -29,3 +29,8 @@ export interface UserVault {
   user: string;
   balance: bigint;
 }
+
+export interface AccrualState {
+  last_claim_ts: bigint;
+  total_claimed_points: bigint;
+}
