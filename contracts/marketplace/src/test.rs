@@ -213,7 +213,7 @@ fn test_buy_bot_pays_seller_minus_fee_and_transfers_bot() {
     // Listing is now inactive
     let listing = h.mkt.get_listing(&listing_id);
     assert!(!listing.active);
-    assert_eq!(h.mkt.get_active_listings().len(), 0);
+    assert_eq!(h.mkt.get_active_listings(&0, &100).len(), 0);
 }
 
 #[test]
@@ -237,7 +237,7 @@ fn test_cancel_listing_returns_bot_to_seller() {
     // Listing is inactive and removed from active list
     let listing = h.mkt.get_listing(&listing_id);
     assert!(!listing.active);
-    assert_eq!(h.mkt.get_active_listings().len(), 0);
+    assert_eq!(h.mkt.get_active_listings(&0, &100).len(), 0);
 }
 
 #[test]
@@ -296,4 +296,91 @@ fn test_cancel_listing_by_non_seller_fails() {
     );
     // Listing still active
     assert!(h.mkt.get_listing(&listing_id).active);
+}
+
+// ── get_active_listings edge cases (#120) ───────────────────────────────────
+
+// #120: limit == 0 returns an empty vec (a request for zero items), never a panic
+#[test]
+fn test_get_active_listings_zero_limit_returns_empty() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let bot_id = h.bot.mint_basic(&seller);
+    h.mkt
+        .list_bot(&seller, &bot_id, &10_0000000_i128, &h.token.address);
+    // There is one active listing, but a limit of 0 yields nothing.
+    assert_eq!(h.mkt.get_active_listings(&0, &0).len(), 0);
+}
+
+// #120: start beyond the number of active listings returns an empty vec
+#[test]
+fn test_get_active_listings_start_beyond_count_returns_empty() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let bot_id = h.bot.mint_basic(&seller);
+    h.mkt
+        .list_bot(&seller, &bot_id, &10_0000000_i128, &h.token.address);
+    // Only one active listing (index 0); starting at 5 skips everything.
+    assert_eq!(h.mkt.get_active_listings(&5, &100).len(), 0);
+}
+
+// #120: a stale active-id (index entry present but the Listing record was
+// removed) is skipped gracefully rather than causing a panic.
+#[test]
+fn test_get_active_listings_skips_stale_index_entry() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let id1 = h.bot.mint_basic(&seller);
+    let id2 = h.bot.mint_basic(&seller);
+    let l1 = h
+        .mkt
+        .list_bot(&seller, &id1, &10_0000000_i128, &h.token.address);
+    h.mkt
+        .list_bot(&seller, &id2, &20_0000000_i128, &h.token.address);
+    assert_eq!(h.mkt.get_active_listings(&0, &100).len(), 2);
+
+    // Remove the persistent Listing record for l1 while leaving it in the
+    // ActiveListings index — simulating a stale index entry.
+    h.env.as_contract(&h.mkt.address, || {
+        h.env
+            .storage()
+            .persistent()
+            .remove(&DataKey::Listing(l1));
+    });
+
+    // Only the still-present listing is returned; no panic on the stale id.
+    let listings = h.mkt.get_active_listings(&0, &100);
+    assert_eq!(listings.len(), 1);
+    assert_eq!(listings.get(0).unwrap().id, 2);
+}
+
+// #120: an id present in the active-ids index but whose listing is marked
+// inactive is filtered out.
+#[test]
+fn test_get_active_listings_filters_inactive_still_in_index() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let id1 = h.bot.mint_basic(&seller);
+    let l1 = h
+        .mkt
+        .list_bot(&seller, &id1, &10_0000000_i128, &h.token.address);
+    assert_eq!(h.mkt.get_active_listings(&0, &100).len(), 1);
+
+    // Flip the listing to inactive but leave it in the ActiveListings index.
+    h.env.as_contract(&h.mkt.address, || {
+        let mut listing: Listing = h
+            .env
+            .storage()
+            .persistent()
+            .get(&DataKey::Listing(l1))
+            .unwrap();
+        listing.active = false;
+        h.env
+            .storage()
+            .persistent()
+            .set(&DataKey::Listing(l1), &listing);
+    });
+
+    // The inactive listing is filtered out despite remaining in the index.
+    assert_eq!(h.mkt.get_active_listings(&0, &100).len(), 0);
 }

@@ -191,13 +191,35 @@ impl MarketplaceContract {
             .ok_or(MarketplaceError::ListingNotFound)
     }
 
+    /// Return up to `limit` active listings, skipping the first `start` entries
+    /// of the active-listings index.
+    ///
+    /// Input validation / edge-case handling (issue #120):
+    /// - `limit == 0`: a request for zero items is trivially satisfied, so we
+    ///   return an empty vec immediately rather than treating it as an error.
+    /// - `start` beyond the number of active listings: the index iteration
+    ///   simply skips every entry and yields an empty vec — no panic.
+    /// - Stale index entry (an id in `ActiveListings` whose `Listing(id)` record
+    ///   was removed from persistent storage): skipped gracefully via the
+    ///   `if let Some(l)` guard.
+    /// - An id still present in the index but whose listing has `active == false`:
+    ///   filtered out by the `if l.active` check.
+    ///
+    /// Every edge case degrades gracefully to an empty/partial result, so there
+    /// is no genuine failure condition to signal. The return type stays
+    /// `Vec<Listing>` (rather than `Result<..>`) to avoid needless API churn for
+    /// callers.
     pub fn get_active_listings(env: Env, start: u64, limit: u32) -> Vec<Listing> {
+        let mut result: Vec<Listing> = Vec::new(&env);
+        // A request for zero items is trivially satisfied with an empty vec.
+        if limit == 0 {
+            return result;
+        }
         let active_ids: Vec<u64> = env
             .storage()
             .instance()
             .get(&DataKey::ActiveListings)
             .unwrap_or_else(|| Vec::new(&env));
-        let mut result: Vec<Listing> = Vec::new(&env);
         let mut count: u32 = 0;
         for (i, id) in active_ids.iter().enumerate() {
             if (i as u64) < start {
