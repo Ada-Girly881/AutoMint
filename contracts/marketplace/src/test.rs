@@ -180,3 +180,85 @@ fn test_active_listings_empty_initially() {
     let h = setup();
     assert_eq!(h.mkt.get_active_listings().len(), 0);
 }
+
+#[test]
+fn test_buy_bot_success() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let buyer = Address::generate(&h.env);
+    let bot_id = h.bot.mint_basic(&seller);
+
+    h.token.mint(&buyer, &100_0000000_i128);
+
+    let listing_id = h
+        .mkt
+        .list_bot(&seller, &bot_id, &100_0000000_i128, &h.token.address);
+    assert_eq!(listing_id, 1);
+
+    h.mkt.buy_bot(&buyer, &listing_id);
+
+    let listing = h.mkt.get_listing(&listing_id);
+    assert!(!listing.active);
+
+    let bot = h.bot.get_bot(&bot_id);
+    assert_eq!(bot.owner, buyer);
+
+    // 2.5% fee to admin (2_5000000), 97.5% to seller (97_5000000)
+    assert_eq!(h.token.balance(&seller), 97_5000000_i128);
+    assert_eq!(h.token.balance(&h.admin), 2_5000000_i128);
+    assert_eq!(h.token.balance(&buyer), 0_i128);
+}
+
+#[test]
+fn test_buy_bot_listing_not_found() {
+    let h = setup();
+    let buyer = Address::generate(&h.env);
+    assert_eq!(
+        h.mkt.try_buy_bot(&buyer, &999_u64),
+        Err(Ok(MarketplaceError::ListingNotFound))
+    );
+}
+
+#[test]
+fn test_buy_bot_inactive_listing_fails() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let buyer1 = Address::generate(&h.env);
+    let buyer2 = Address::generate(&h.env);
+    let bot_id = h.bot.mint_basic(&seller);
+
+    h.token.mint(&buyer1, &100_0000000_i128);
+    h.token.mint(&buyer2, &100_0000000_i128);
+
+    let listing_id = h
+        .mkt
+        .list_bot(&seller, &bot_id, &100_0000000_i128, &h.token.address);
+
+    h.mkt.buy_bot(&buyer1, &listing_id);
+
+    // Second purchase attempt must fail with ListingInactive
+    assert_eq!(
+        h.mkt.try_buy_bot(&buyer2, &listing_id),
+        Err(Ok(MarketplaceError::ListingInactive))
+    );
+}
+
+#[test]
+fn test_buy_bot_insufficient_funds_fails() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let buyer = Address::generate(&h.env);
+    let bot_id = h.bot.mint_basic(&seller);
+
+    // Buyer has insufficient balance (10 tokens vs 100 price)
+    h.token.mint(&buyer, &10_0000000_i128);
+
+    let listing_id = h
+        .mkt
+        .list_bot(&seller, &bot_id, &100_0000000_i128, &h.token.address);
+
+    assert_eq!(
+        h.mkt.try_buy_bot(&buyer, &listing_id),
+        Err(Ok(MarketplaceError::InsufficientFunds))
+    );
+}
