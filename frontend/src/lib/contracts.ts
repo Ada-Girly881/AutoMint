@@ -1,7 +1,7 @@
 import {
   Contract,
   SorobanRpc,
-  xdr,
+  TransactionBuilder,
   scValToNative,
   nativeToScVal,
 } from "@stellar/stellar-sdk";
@@ -15,6 +15,9 @@ import {
 import { getServer } from "./stellar";
 import type { BotNFT, UserProfile, BotTier, MarketplaceListing, AccrualState } from "@/types";
 
+const toBigInt = (v: unknown): bigint =>
+  typeof v === "bigint" ? v : BigInt(String(v ?? 0));
+
 /**
  * Parse a raw scVal map from the registry contract into a typed UserProfile.
  * Handles the tier enum being returned as a string, array, or object.
@@ -22,9 +25,11 @@ import type { BotNFT, UserProfile, BotTier, MarketplaceListing, AccrualState } f
 export function parseUserProfile(
   rawData: Record<string, unknown>
 ): UserProfile {
+  const raw = rawData.points;
+  const points = typeof raw === "bigint" ? raw : BigInt(String(raw ?? 0));
   return {
     username: String(rawData.username ?? ""),
-    points: BigInt(rawData.points ?? 0),
+    points,
   };
 }
 
@@ -53,11 +58,13 @@ export function parseBotNFT(rawData: Record<string, unknown>): BotNFT {
   }
 
   return {
-    id: BigInt(rawData.id ?? 0),
+    id: toBigInt(rawData.id),
+    name: String(rawData.name ?? ""),
     owner: String(rawData.owner ?? ""),
     tier,
-    accrual_rate: BigInt(rawData.accrual_rate ?? 0),
-    last_claim_timestamp: BigInt(rawData.last_claim_timestamp ?? 0),
+    accrual_rate: toBigInt(rawData.accrual_rate),
+    minted_at: Number(rawData.minted_at ?? 0),
+    last_claim_timestamp: toBigInt(rawData.last_claim_timestamp),
   };
 }
 
@@ -70,11 +77,9 @@ export async function getAmtBalance(userAddress: string): Promise<bigint> {
   const contract = new Contract(TOKEN_CONTRACT_ID);
 
   const result = await server.simulateTransaction(
-    new SorobanRpc.TransactionBuilder(
-      await server.getAccount(userAddress),
-      100
+    new TransactionBuilder(
+      await server.getAccount(userAddress), { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
     )
-      .setNetworkPassphrase("Test SDF Network ; September 2015")
       .addOperation(
         contract.call("balance", nativeToScVal(userAddress, { type: "address" }))
       )
@@ -82,21 +87,15 @@ export async function getAmtBalance(userAddress: string): Promise<bigint> {
       .build()
   );
 
-  if (
-    result.error ||
-    !result.results ||
-    result.results.length === 0 ||
-    !result.results[0].xdr
-  ) {
+  if (SorobanRpc.Api.isSimulationError(result)) {
     throw new Error("Failed to get AMT balance");
   }
 
-  const resultXdr = xdr.TransactionResult.fromXDR(
-    result.results[0].xdr,
-    "base64"
-  );
-  const balance = scValToNative(resultXdr.result().value());
+  if (!result.result?.retval) {
+    throw new Error("No return value from simulation");
+  }
 
+  const balance = scValToNative(result.result.retval);
   return BigInt(balance ?? 0);
 }
 
@@ -112,11 +111,12 @@ export async function listBot(
   const server = getServer();
   const contract = new Contract(MARKETPLACE_CONTRACT_ID);
 
+  const txBuilder = new TransactionBuilder(
+    await server.getAccount((window as any).selectedPublicKey), { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
   const txBuilder = new SorobanRpc.TransactionBuilder(
     await server.getAccount(userAddress),
     100
   )
-    .setNetworkPassphrase("Test SDF Network ; September 2015")
     .addOperation(
       contract.call(
         "list_bot",
@@ -134,17 +134,69 @@ export async function listBot(
  * Buy a bot from the marketplace.
  * Transfers AMT tokens to seller and bot to buyer.
  */
-export async function buyBot(listingId: bigint): Promise<string> {
+export async function buyBot(address: string, listingId: number): Promise<string> {
   const server = getServer();
   const contract = new Contract(MARKETPLACE_CONTRACT_ID);
 
-  const txBuilder = new SorobanRpc.TransactionBuilder(
-    await server.getAccount((window as any).selectedPublicKey),
-    100
+  const txBuilder = new TransactionBuilder(
+    await server.getAccount(address), { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
   )
-    .setNetworkPassphrase("Test SDF Network ; September 2015")
     .addOperation(
       contract.call("buy_bot", nativeToScVal(listingId, { type: "u128" }))
+    )
+    .setTimeout(30)
+    .build();
+
+  return txBuilder.toXDR();
+}
+
+/**
+ * Fetch the leaderboard of top users by points.
+ */
+export async function getLeaderboard(limit: number = 50): Promise<UserProfile[]> {
+  const server = getServer();
+  const contract = new Contract(REGISTRY_CONTRACT_ID);
+
+  const result = await server.simulateTransaction(
+    new TransactionBuilder(
+      await server.getAccount((window as any).selectedPublicKey), { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
+    )
+      .addOperation(
+        contract.call("leaderboard", nativeToScVal(limit, { type: "u32" }))
+      )
+      .setTimeout(30)
+      .build()
+  );
+
+  if (SorobanRpc.Api.isSimulationError(result)) {
+    return [];
+  }
+
+  if (!result.result?.retval) return [];
+
+  const raw = scValToNative(result.result.retval);
+  if (!Array.isArray(raw)) return [];
+
+  return raw.map((entry: Record<string, unknown>) => parseUserProfile(entry));
+}
+
+/**
+ * Mint a bot of a specific tier.
+ */
+export async function mintTierBot(address: string, tier: string, token: string): Promise<string> {
+  const server = getServer();
+  const contract = new Contract(BOT_NFT_CONTRACT_ID);
+
+  const txBuilder = new TransactionBuilder(
+    await server.getAccount(address), { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
+  )
+    .addOperation(
+      contract.call(
+        "mint",
+        nativeToScVal(address, { type: "address" }),
+        nativeToScVal(tier, { type: "symbol" }),
+        nativeToScVal(token, { type: "string" })
+      )
     )
     .setTimeout(30)
     .build();
@@ -163,11 +215,12 @@ export async function cancelListing(
   const server = getServer();
   const contract = new Contract(MARKETPLACE_CONTRACT_ID);
 
+  const txBuilder = new TransactionBuilder(
+    await server.getAccount((window as any).selectedPublicKey), { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
   const txBuilder = new SorobanRpc.TransactionBuilder(
     await server.getAccount(userAddress),
     100
   )
-    .setNetworkPassphrase("Test SDF Network ; September 2015")
     .addOperation(
       contract.call(
         "cancel_listing",
@@ -189,41 +242,34 @@ export async function getActiveListings(): Promise<MarketplaceListing[]> {
   const contract = new Contract(MARKETPLACE_CONTRACT_ID);
 
   const result = await server.simulateTransaction(
-    new SorobanRpc.TransactionBuilder(
-      await server.getAccount((window as any).selectedPublicKey),
-      100
+    new TransactionBuilder(
+      await server.getAccount((window as any).selectedPublicKey), { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
     )
-      .setNetworkPassphrase("Test SDF Network ; September 2015")
       .addOperation(contract.call("get_active_listings"))
       .setTimeout(30)
       .build()
   );
 
-  if (
-    result.error ||
-    !result.results ||
-    result.results.length === 0 ||
-    !result.results[0].xdr
-  ) {
+  if (SorobanRpc.Api.isSimulationError(result)) {
     return [];
   }
 
-  const resultXdr = xdr.TransactionResult.fromXDR(
-    result.results[0].xdr,
-    "base64"
-  );
-  const listingsRaw = scValToNative(resultXdr.result().value());
+  if (!result.result?.retval) {
+    return [];
+  }
+
+  const listingsRaw = scValToNative(result.result.retval);
 
   if (!Array.isArray(listingsRaw)) {
     return [];
   }
 
   return listingsRaw.map((listing: Record<string, unknown>) => ({
-    id: BigInt(listing.id ?? 0),
+    id: toBigInt(listing.id),
     seller: String(listing.seller ?? ""),
-    bot_id: BigInt(listing.bot_id ?? 0),
-    price: BigInt(listing.price ?? 0),
-    listed_at: BigInt(listing.listed_at ?? 0),
+    bot_id: toBigInt(listing.bot_id),
+    price: toBigInt(listing.price),
+    listed_at: toBigInt(listing.listed_at),
   }));
 }
 
@@ -238,11 +284,9 @@ export async function getUserListings(
   const contract = new Contract(MARKETPLACE_CONTRACT_ID);
 
   const result = await server.simulateTransaction(
-    new SorobanRpc.TransactionBuilder(
-      await server.getAccount(userAddress),
-      100
+    new TransactionBuilder(
+      await server.getAccount(userAddress), { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
     )
-      .setNetworkPassphrase("Test SDF Network ; September 2015")
       .addOperation(
         contract.call("get_user_listings", nativeToScVal(userAddress, { type: "address" }))
       )
@@ -250,31 +294,26 @@ export async function getUserListings(
       .build()
   );
 
-  if (
-    result.error ||
-    !result.results ||
-    result.results.length === 0 ||
-    !result.results[0].xdr
-  ) {
+  if (SorobanRpc.Api.isSimulationError(result)) {
     return [];
   }
 
-  const resultXdr = xdr.TransactionResult.fromXDR(
-    result.results[0].xdr,
-    "base64"
-  );
-  const listingsRaw = scValToNative(resultXdr.result().value());
+  if (!result.result?.retval) {
+    return [];
+  }
+
+  const listingsRaw = scValToNative(result.result.retval);
 
   if (!Array.isArray(listingsRaw)) {
     return [];
   }
 
   return listingsRaw.map((listing: Record<string, unknown>) => ({
-    id: BigInt(listing.id ?? 0),
+    id: toBigInt(listing.id),
     seller: String(listing.seller ?? ""),
-    bot_id: BigInt(listing.bot_id ?? 0),
-    price: BigInt(listing.price ?? 0),
-    listed_at: BigInt(listing.listed_at ?? 0),
+    bot_id: toBigInt(listing.bot_id),
+    price: toBigInt(listing.price),
+    listed_at: toBigInt(listing.listed_at),
   }));
 }
 
