@@ -39,6 +39,9 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
+                  "u32": 250
                 }
               ]
             }
@@ -591,6 +594,14 @@
                               "val": {
                                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                               }
+                            },
+                            {
+                              "key": {
+                                "symbol": "fee_bps"
+                              },
+                              "val": {
+                                "u32": 250
+                              }
                             }
                           ]
                         }
@@ -872,6 +883,9 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
+                  "u32": 250
                 }
               ]
             }

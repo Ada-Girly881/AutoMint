@@ -1,2 +1,5 @@
-// TODO: implement providers.tsx
-// See the project's GitHub Issues for the specific task assigned to this file.
+"use client";
+
+export default function Providers({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+}
