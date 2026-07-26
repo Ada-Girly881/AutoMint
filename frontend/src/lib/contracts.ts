@@ -69,6 +69,21 @@ export function parseBotNFT(rawData: Record<string, unknown>): BotNFT {
 }
 
 /**
+ * Parse a raw scVal map from the marketplace contract into a typed MarketplaceListing.
+ */
+export function parseListing(
+  rawData: Record<string, unknown>
+): MarketplaceListing {
+  return {
+    id: toBigInt(rawData.id),
+    seller: String(rawData.seller ?? ""),
+    bot_id: toBigInt(rawData.bot_id),
+    price: toBigInt(rawData.price),
+    listed_at: toBigInt(rawData.listed_at),
+  };
+}
+
+/**
  * Get the AMT token balance for a user.
  * Calls token contract's balance() function.
  */
@@ -112,10 +127,8 @@ export async function listBot(
   const contract = new Contract(MARKETPLACE_CONTRACT_ID);
 
   const txBuilder = new TransactionBuilder(
-    await server.getAccount((window as any).selectedPublicKey), { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
-  const txBuilder = new SorobanRpc.TransactionBuilder(
     await server.getAccount(userAddress),
-    100
+    { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
   )
     .addOperation(
       contract.call(
@@ -216,10 +229,8 @@ export async function cancelListing(
   const contract = new Contract(MARKETPLACE_CONTRACT_ID);
 
   const txBuilder = new TransactionBuilder(
-    await server.getAccount((window as any).selectedPublicKey), { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
-  const txBuilder = new SorobanRpc.TransactionBuilder(
     await server.getAccount(userAddress),
-    100
+    { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
   )
     .addOperation(
       contract.call(
@@ -264,13 +275,7 @@ export async function getActiveListings(): Promise<MarketplaceListing[]> {
     return [];
   }
 
-  return listingsRaw.map((listing: Record<string, unknown>) => ({
-    id: toBigInt(listing.id),
-    seller: String(listing.seller ?? ""),
-    bot_id: toBigInt(listing.bot_id),
-    price: toBigInt(listing.price),
-    listed_at: toBigInt(listing.listed_at),
-  }));
+  return listingsRaw.map((listing: Record<string, unknown>) => parseListing(listing));
 }
 
 /**
@@ -308,13 +313,7 @@ export async function getUserListings(
     return [];
   }
 
-  return listingsRaw.map((listing: Record<string, unknown>) => ({
-    id: toBigInt(listing.id),
-    seller: String(listing.seller ?? ""),
-    bot_id: toBigInt(listing.bot_id),
-    price: toBigInt(listing.price),
-    listed_at: toBigInt(listing.listed_at),
-  }));
+  return listingsRaw.map((listing: Record<string, unknown>) => parseListing(listing));
 }
 
 /**

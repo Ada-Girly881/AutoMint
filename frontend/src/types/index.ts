@@ -28,6 +28,8 @@ export interface MarketplaceListing {
   listed_at: bigint;
 }
 
+export type Listing = MarketplaceListing;
+
 export interface UserVault {
   user: string;
   balance: bigint;
