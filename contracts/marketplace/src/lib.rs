@@ -51,6 +51,7 @@ pub enum MarketplaceError {
     ListingNotActive = 9,
     Unauthorized = 10,
     PaymentFailed = 11,
+    Overflow = 12,
 }
 
 const LEDGER_BUMP: u32 = 120960;
@@ -270,9 +271,22 @@ impl MarketplaceContract {
             return Err(MarketplaceError::ListingNotActive);
         }
 
-        // 2.5% fee (250 basis points)
-        let fee = listing.price * 25 / 1000;
-        let seller_payment = listing.price - fee;
+        // A seller cannot buy back their own listing through this flow.
+        if buyer == listing.seller {
+            return Err(MarketplaceError::Unauthorized);
+        }
+
+        // 2.5% fee (250 basis points), guarded against overflow instead of
+        // panicking on an extreme listing price.
+        let fee = listing
+            .price
+            .checked_mul(25)
+            .and_then(|v| v.checked_div(1000))
+            .ok_or(MarketplaceError::Overflow)?;
+        let seller_payment = listing
+            .price
+            .checked_sub(fee)
+            .ok_or(MarketplaceError::Overflow)?;
 
         let token_client = token::Client::new(&env, &listing.currency);
         if token_client
