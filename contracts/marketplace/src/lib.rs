@@ -300,7 +300,7 @@ mod test {
         let bot = BotNFTContractClient::new(env, &bot_id);
         let tok = AMTTokenClient::new(env, &tok_id);
         let mkt = MarketplaceContractClient::new(env, &mkt_id);
-        bot.initialize(&admin);
+        bot.initialize(&admin, &tok_id);
         tok.initialize(
             &admin,
             &7u32,
@@ -316,12 +316,12 @@ mod test {
         let env = Env::default();
         let (_, bot, tok, mkt) = setup(&env);
         let seller = Address::generate(&env);
-        let bot_id = bot.mint_basic(&seller).unwrap();
-        mkt.list_bot(&seller, &bot_id, &0u32, &50_0000000_i128, &tok.address).unwrap();
+        let bot_id = bot.mint_basic(&seller);
+        mkt.list_bot(&seller, &bot_id, &0u32, &50_0000000_i128, &tok.address);
         let listings = mkt.get_active_listings(&0u32, &10u32);
         assert_eq!(listings.len(), 1);
         assert_eq!(listings.get(0).unwrap().bot_id, bot_id);
-        mkt.cancel_listing(&seller, &1u64).unwrap();
+        mkt.cancel_listing(&seller, &1u64);
         assert_eq!(mkt.get_active_listings(&0u32, &10u32).len(), 0);
         assert_eq!(bot.get_user_bots(&seller).len(), 1);
     }
@@ -333,9 +333,9 @@ mod test {
         let seller = Address::generate(&env);
         let buyer = Address::generate(&env);
         tok.mint(&buyer, &1000_0000000_i128);
-        let bot_nft_id = bot.mint_basic(&seller).unwrap();
-        mkt.list_bot(&seller, &bot_nft_id, &0u32, &100_0000000_i128, &tok.address).unwrap();
-        mkt.buy_bot(&buyer, &1u64).unwrap();
+        let bot_nft_id = bot.mint_basic(&seller);
+        mkt.list_bot(&seller, &bot_nft_id, &0u32, &100_0000000_i128, &tok.address);
+        mkt.buy_bot(&buyer, &1u64);
         assert_eq!(bot.get_user_bots(&buyer).len(), 1);
         assert_eq!(bot.get_user_bots(&seller).len(), 0);
         // 2.5% fee goes to admin (fee_recipient)
@@ -349,8 +349,8 @@ mod test {
         let env = Env::default();
         let (_, bot, tok, mkt) = setup(&env);
         let seller = Address::generate(&env);
-        let bot_id = bot.mint_basic(&seller).unwrap();
-        mkt.list_bot(&seller, &bot_id, &0u32, &50_0000000_i128, &tok.address).unwrap();
+        let bot_id = bot.mint_basic(&seller);
+        mkt.list_bot(&seller, &bot_id, &0u32, &50_0000000_i128, &tok.address);
         assert!(mkt.try_buy_bot(&seller, &1u64).is_err());
     }
 
@@ -359,7 +359,7 @@ mod test {
         let env = Env::default();
         let (_, bot, tok, mkt) = setup(&env);
         let seller = Address::generate(&env);
-        let bot_id = bot.mint_basic(&seller).unwrap();
+        let bot_id = bot.mint_basic(&seller);
         assert!(mkt.try_list_bot(&seller, &bot_id, &0u32, &0_i128, &tok.address).is_err());
     }
 
@@ -376,10 +376,11 @@ mod test {
         let env = Env::default();
         let (_, bot, tok, mkt) = setup(&env);
         let seller = Address::generate(&env);
-        let id1 = bot.mint_basic(&seller).unwrap();
-        let id2 = bot.mint_tier(&seller, &automint_bot_nft::BotTier::Bronze).unwrap();
-        mkt.list_bot(&seller, &id1, &0u32, &10_0000000_i128, &tok.address).unwrap();
-        mkt.list_bot(&seller, &id2, &1u32, &20_0000000_i128, &tok.address).unwrap();
+        let id1 = bot.mint_basic(&seller);
+        tok.mint(&seller, &automint_bot_nft::BotTier::Bronze.price());
+        let id2 = bot.mint_tier(&seller, &automint_bot_nft::BotTier::Bronze);
+        mkt.list_bot(&seller, &id1, &0u32, &10_0000000_i128, &tok.address);
+        mkt.list_bot(&seller, &id2, &1u32, &20_0000000_i128, &tok.address);
         assert_eq!(mkt.get_active_listings(&0u32, &10u32).len(), 2);
         assert_eq!(mkt.get_user_listings(&seller).len(), 2);
     }

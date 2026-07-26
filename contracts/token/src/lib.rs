@@ -67,6 +67,7 @@ impl AMTToken {
         if env.storage().instance().has(&DataKey::State) {
             return Err(TokenError::AlreadyInitialized);
         }
+        admin.require_auth();
         let state = TokenState { decimal, name, symbol };
         env.storage().instance().set(&DataKey::State, &state);
         env.storage().instance().set(&DataKey::Admin, &admin);

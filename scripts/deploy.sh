@@ -53,7 +53,7 @@ MARKETPLACE_ID=$(_deploy automint_marketplace)
 # initialize — order matters: token before accrual, accrual before set_admin
 _invoke "$TOKEN_ID" initialize --admin "$ADMIN" --decimal 7 --name "AutoMint Token" --symbol "AMT"
 _invoke "$REGISTRY_ID" initialize --admin "$ADMIN"
-_invoke "$BOT_NFT_ID" initialize --admin "$ADMIN"
+_invoke "$BOT_NFT_ID" initialize --admin "$ADMIN" --token "$TOKEN_ID"
 _invoke "$ACCRUAL_ID" initialize --admin "$ADMIN" --registry "$REGISTRY_ID" --bot_nft "$BOT_NFT_ID" --token "$TOKEN_ID"
 _invoke "$MARKETPLACE_ID" initialize --admin "$ADMIN" --bot_nft "$BOT_NFT_ID" --fee_recipient "$ADMIN"
 # hand token admin to accrual so it can mint $AMT on claim
