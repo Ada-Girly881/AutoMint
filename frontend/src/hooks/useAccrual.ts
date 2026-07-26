@@ -67,7 +67,7 @@ export function useRegister() {
 
 /** Whether the connected wallet address is registered in the registry contract. */
 export function useRegistered() {
-  const address = useWalletStore((s: { address: string | null }) => s.address);
+  const address = useWalletStore((s) => s.publicKey);
 
   return useQuery<boolean>({
     queryKey: ["registered", address],
@@ -79,7 +79,7 @@ export function useRegistered() {
 
 /** Registry profile (username, points) for the connected wallet address. */
 export function useProfile() {
-  const address = useWalletStore((s: { address: string | null }) => s.address);
+  const address = useWalletStore((s) => s.publicKey);
 
   return useQuery<UserProfile | null>({
     queryKey: ["profile", address],
@@ -91,7 +91,7 @@ export function useProfile() {
 
 /** Bot IDs owned by the connected wallet address, from the bot_nft contract. */
 export function useBots() {
-  const address = useWalletStore((s: { address: string | null }) => s.address);
+  const address = useWalletStore((s) => s.publicKey);
 
   return useQuery<bigint[]>({
     queryKey: ["bots", address],
@@ -103,47 +103,32 @@ export function useBots() {
 
 /** Accrual state (last claim timestamp, cumulative claimed points) for the connected wallet address. */
 export function useAccrualState() {
-  const address = useWalletStore((s: { address: string | null }) => s.address);
+  const address = useWalletStore((s) => s.publicKey);
 
   return useQuery<AccrualState | null>({
     queryKey: ["accrualState", address],
     queryFn: () => (address ? getAccrualState(address) : Promise.resolve(null)),
     enabled: !!address,
     refetchInterval: POLL_INTERVAL,
-export function useAnimatedPoints(ratePerHour: number = BASIC_BOT_RATE) {
-  const publicKey = useWalletStore((s: { publicKey: string | null }) => s.publicKey);
-  const [displayedPoints, setDisplayedPoints] = useState<bigint>(BigInt(0));
-
-  // Fetch accrual state and user profile
-  const { data: accrualState } = useQuery<AccrualState | null>({
-    queryKey: ["accrualState", publicKey],
-    queryFn: () => (publicKey ? getAccrualState(publicKey) : Promise.resolve(null)),
-    enabled: !!publicKey,
-    refetchInterval: 30000, // Poll every 30 seconds
   });
 }
 
 /** AMT token balance for the connected wallet address, from the token contract. */
 export function useAmtBalance() {
-  const address = useWalletStore((s: { address: string | null }) => s.address);
+  const address = useWalletStore((s) => s.publicKey);
 
   return useQuery<bigint>({
     queryKey: ["amtBalance", address],
     queryFn: () => (address ? getAmtBalance(address) : Promise.resolve(BigInt(0))),
     enabled: !!address,
     refetchInterval: POLL_INTERVAL,
-  const { data: profile } = useQuery<UserProfile | null>({
-    queryKey: ["user", publicKey],
-    queryFn: () => (publicKey ? getUserProfile(publicKey) : Promise.resolve(null)),
-    enabled: !!publicKey,
-    refetchInterval: 30000, // Poll every 30 seconds
   });
 }
 
 /** Claims accrued points (converting to AMT where the threshold is met). */
 export function useClaim() {
   const queryClient = useQueryClient();
-  const address = useWalletStore((s: { address: string | null }) => s.address);
+  const address = useWalletStore((s) => s.publicKey);
 
   return useMutation({
     mutationFn: async () => {

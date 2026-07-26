@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { connectFreighter, getPublicKey, getNetwork } from "@stellar/freighter-api";
+import { requestAccess, getAddress, getNetwork } from "@stellar/freighter-api";
 import { toast } from "sonner";
 import { useWalletStore } from "@/store/walletStore";
 
@@ -24,10 +24,10 @@ export function useWallet() {
     toast.loading("Connecting wallet...", { id: "wallet-connect" });
 
     try {
-      await connectFreighter();
-      const pk = await getPublicKey();
+      await requestAccess();
+      const { address: pk } = await getAddress();
       const net = await getNetwork();
-      setConnected(pk, net.network passphrase);
+      setConnected(pk, net.networkPassphrase);
       toast.success("Wallet connected!", { id: "wallet-connect" });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to connect wallet";
