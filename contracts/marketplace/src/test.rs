@@ -299,6 +299,48 @@ fn test_buy_bot_insufficient_funds_fails() {
 }
 
 #[test]
+fn test_buy_bot_self_purchase_fails() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let bot_id = h.bot.mint_basic(&seller);
+    let price = 100_0000000_i128;
+    h.token.mint(&seller, &price);
+
+    let listing_id = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address);
+
+    // A seller cannot buy back their own listing.
+    assert_eq!(
+        h.mkt.try_buy_bot(&seller, &listing_id),
+        Err(Ok(MarketplaceError::Unauthorized))
+    );
+    // Listing is unaffected and the bot remains escrowed.
+    assert!(h.mkt.get_listing(&listing_id).active);
+    assert_eq!(h.bot.get_bot(&bot_id).owner, h.mkt.address);
+}
+
+#[test]
+fn test_buy_bot_extreme_price_overflow_fails() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    let buyer = Address::generate(&h.env);
+    let bot_id = h.bot.mint_basic(&seller);
+
+    // A price this large makes the 2.5% fee computation (price * 25) overflow
+    // i128. This must surface as an error, not a panic.
+    let listing_id = h
+        .mkt
+        .list_bot(&seller, &bot_id, &i128::MAX, &h.token.address);
+
+    assert_eq!(
+        h.mkt.try_buy_bot(&buyer, &listing_id),
+        Err(Ok(MarketplaceError::Overflow))
+    );
+    // Listing is unaffected and the bot remains escrowed.
+    assert!(h.mkt.get_listing(&listing_id).active);
+    assert_eq!(h.bot.get_bot(&bot_id).owner, h.mkt.address);
+}
+
+#[test]
 fn test_cancel_listing_returns_bot_to_seller() {
     let h = setup();
     let seller = Address::generate(&h.env);
@@ -359,6 +401,16 @@ fn test_cancel_already_cancelled_listing_fails() {
     assert_eq!(
         h.mkt.try_cancel_listing(&seller, &listing_id),
         Err(Ok(MarketplaceError::ListingNotActive))
+    );
+}
+
+#[test]
+fn test_cancel_listing_not_found() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    assert_eq!(
+        h.mkt.try_cancel_listing(&seller, &404_u64),
+        Err(Ok(MarketplaceError::ListingNotFound))
     );
 }
 
