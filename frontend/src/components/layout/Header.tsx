@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, Wallet, LogOut } from "lucide-react";
 import clsx from "clsx";
-import { useWalletStore } from "@/store/walletStore";
+import { useWallet } from "@/hooks/useWallet";
 
 const navLinks = [
   { label: "Dashboard", href: "/dashboard" },
@@ -21,12 +21,7 @@ function truncateAddress(address: string): string {
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
-  const { address, connected, connect, disconnect } = useWalletStore();
-
-  const handleConnect = () => {
-    const demoAddress = "GDEMOADDRESS1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    connect(demoAddress);
-  };
+  const { publicKey, isConnected, connect, disconnect } = useWallet();
 
   return (
     <header className="sticky top-0 z-50 border-b border-liner bg-bg/80 backdrop-blur-xl">
@@ -59,11 +54,11 @@ export default function Header() {
         </nav>
 
         <div className="hidden items-center gap-3 md:flex">
-          {connected && address ? (
+          {isConnected && publicKey ? (
             <div className="flex items-center gap-2 rounded-xl border border-liner bg-card-2 px-3 py-2">
               <Wallet className="h-4 w-4 text-green" />
               <span className="text-sm font-medium text-text">
-                {truncateAddress(address)}
+                {truncateAddress(publicKey)}
               </span>
               <button
                 onClick={disconnect}
@@ -75,7 +70,7 @@ export default function Header() {
             </div>
           ) : (
             <button
-              onClick={handleConnect}
+              onClick={connect}
               className="flex items-center gap-2 rounded-xl bg-gold/10 px-4 py-2 text-sm font-medium text-gold border border-gold/30 hover:bg-gold/20 hover:border-gold/50 transition-all"
             >
               <Wallet className="h-4 w-4" />
@@ -115,12 +110,12 @@ export default function Header() {
               );
             })}
             <div className="mt-2 border-t border-liner pt-2">
-              {connected && address ? (
+              {isConnected && publicKey ? (
                 <div className="flex items-center justify-between rounded-xl border border-liner bg-card-2 px-3 py-2.5">
                   <div className="flex items-center gap-2">
                     <Wallet className="h-4 w-4 text-green" />
                     <span className="text-sm font-medium text-text">
-                      {truncateAddress(address)}
+                      {truncateAddress(publicKey)}
                     </span>
                   </div>
                   <button
@@ -133,7 +128,7 @@ export default function Header() {
                 </div>
               ) : (
                 <button
-                  onClick={() => { handleConnect(); setMobileOpen(false); }}
+                  onClick={() => { connect(); setMobileOpen(false); }}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-gold/10 px-4 py-2.5 text-sm font-medium text-gold border border-gold/30 hover:bg-gold/20 hover:border-gold/50 transition-all"
                 >
                   <Wallet className="h-4 w-4" />

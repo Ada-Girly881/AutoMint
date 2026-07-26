@@ -22,25 +22,25 @@ const POLL_INTERVAL = 30000; // Poll every 30 seconds
 
 export function useRegister() {
   const queryClient = useQueryClient();
-  const address = useWalletStore((s: { address: string | null }) => s.address);
+  const publicKey = useWalletStore((s: { publicKey: string | null }) => s.publicKey);
 
   return useMutation({
     mutationFn: async (username: string) => {
-      if (!address) throw new Error("Wallet not connected");
+      if (!publicKey) throw new Error("Wallet not connected");
 
       // Step 1: Register user
       toast.loading("Registering user...", { id: "register" });
-      const registerTx = await registerUser(address, username);
+      const registerTx = await registerUser(publicKey, username);
       toast.success("User registered successfully!", { id: "register" });
 
       // Step 2: Mint basic bot
       toast.loading("Minting basic bot...", { id: "mint" });
-      const mintTx = await mintBasicBot(address);
+      const mintTx = await mintBasicBot(publicKey);
       toast.success("Basic bot minted successfully!", { id: "mint" });
 
       // Step 3: Start accrual
       toast.loading("Starting accrual...", { id: "accrual" });
-      const accrualTx = await startAccrual(address, BASIC_BOT_RATE);
+      const accrualTx = await startAccrual(publicKey, BASIC_BOT_RATE);
       toast.success("Accrual started successfully!", { id: "accrual" });
 
       return { registerTx, mintTx, accrualTx };
@@ -110,6 +110,16 @@ export function useAccrualState() {
     queryFn: () => (address ? getAccrualState(address) : Promise.resolve(null)),
     enabled: !!address,
     refetchInterval: POLL_INTERVAL,
+export function useAnimatedPoints(ratePerHour: number = BASIC_BOT_RATE) {
+  const publicKey = useWalletStore((s: { publicKey: string | null }) => s.publicKey);
+  const [displayedPoints, setDisplayedPoints] = useState<bigint>(BigInt(0));
+
+  // Fetch accrual state and user profile
+  const { data: accrualState } = useQuery<AccrualState | null>({
+    queryKey: ["accrualState", publicKey],
+    queryFn: () => (publicKey ? getAccrualState(publicKey) : Promise.resolve(null)),
+    enabled: !!publicKey,
+    refetchInterval: 30000, // Poll every 30 seconds
   });
 }
 
@@ -122,6 +132,11 @@ export function useAmtBalance() {
     queryFn: () => (address ? getAmtBalance(address) : Promise.resolve(BigInt(0))),
     enabled: !!address,
     refetchInterval: POLL_INTERVAL,
+  const { data: profile } = useQuery<UserProfile | null>({
+    queryKey: ["user", publicKey],
+    queryFn: () => (publicKey ? getUserProfile(publicKey) : Promise.resolve(null)),
+    enabled: !!publicKey,
+    refetchInterval: 30000, // Poll every 30 seconds
   });
 }
 
