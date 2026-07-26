@@ -45,9 +45,12 @@ pub enum MarketplaceError {
     InvalidPrice = 3,
     BotTransferFailed = 4,
     ListingNotFound = 5,
-    ListingNotActive = 6,
-    Unauthorized = 7,
-    PaymentFailed = 8,
+    NotSeller = 6,
+    ListingInactive = 7,
+    InsufficientFunds = 8,
+    ListingNotActive = 9,
+    Unauthorized = 10,
+    PaymentFailed = 11,
 }
 
 const LEDGER_BUMP: u32 = 120960;
@@ -269,11 +272,11 @@ impl MarketplaceContract {
 
         // 2.5% fee (250 basis points)
         let fee = listing.price * 25 / 1000;
-        let seller_amount = listing.price - fee;
+        let seller_payment = listing.price - fee;
 
         let token_client = token::Client::new(&env, &listing.currency);
         if token_client
-            .try_transfer(&buyer, &listing.seller, &seller_amount)
+            .try_transfer(&buyer, &listing.seller, &seller_payment)
             .is_err()
         {
             return Err(MarketplaceError::PaymentFailed);
@@ -316,7 +319,7 @@ impl MarketplaceContract {
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
         env.events().publish(
-            (symbol_short!("sold"), listing.seller, buyer),
+            (symbol_short!("bought"), buyer, listing_id),
             (listing.bot_id, listing.price),
         );
         Ok(())
