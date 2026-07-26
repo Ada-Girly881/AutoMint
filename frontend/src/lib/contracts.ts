@@ -323,11 +323,10 @@ export async function registerUser(userAddress: string, username: string): Promi
   const server = getServer();
   const contract = new Contract(REGISTRY_CONTRACT_ID);
 
-  const txBuilder = new SorobanRpc.TransactionBuilder(
+  const txBuilder = new TransactionBuilder(
     await server.getAccount(userAddress),
-    100
+    { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
   )
-    .setNetworkPassphrase("Test SDF Network ; September 2015")
     .addOperation(
       contract.call("register", nativeToScVal(userAddress, { type: "address" }), nativeToScVal(username, { type: "string" }))
     )
@@ -344,11 +343,10 @@ export async function mintBasicBot(userAddress: string): Promise<string> {
   const server = getServer();
   const contract = new Contract(BOT_NFT_CONTRACT_ID);
 
-  const txBuilder = new SorobanRpc.TransactionBuilder(
+  const txBuilder = new TransactionBuilder(
     await server.getAccount(userAddress),
-    100
+    { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
   )
-    .setNetworkPassphrase("Test SDF Network ; September 2015")
     .addOperation(
       contract.call("mint_basic", nativeToScVal(userAddress, { type: "address" }))
     )
@@ -365,11 +363,10 @@ export async function startAccrual(userAddress: string, rate: number): Promise<s
   const server = getServer();
   const contract = new Contract(ACCRUAL_CONTRACT_ID);
 
-  const txBuilder = new SorobanRpc.TransactionBuilder(
+  const txBuilder = new TransactionBuilder(
     await server.getAccount(userAddress),
-    100
+    { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
   )
-    .setNetworkPassphrase("Test SDF Network ; September 2015")
     .addOperation(
       contract.call("start_accrual", nativeToScVal(userAddress, { type: "address" }), nativeToScVal(rate, { type: "u32" }))
     )
@@ -387,30 +384,24 @@ export async function getAccrualState(userAddress: string): Promise<AccrualState
   const contract = new Contract(ACCRUAL_CONTRACT_ID);
 
   const result = await server.simulateTransaction(
-    new SorobanRpc.TransactionBuilder(
+    new TransactionBuilder(
       await server.getAccount(userAddress),
-      100
+      { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
     )
-      .setNetworkPassphrase("Test SDF Network ; September 2015")
       .addOperation(contract.call("get_accrual_state", nativeToScVal(userAddress, { type: "address" })))
       .setTimeout(30)
       .build()
   );
 
-  if (
-    result.error ||
-    !result.results ||
-    result.results.length === 0 ||
-    !result.results[0].xdr
-  ) {
+  if (SorobanRpc.Api.isSimulationError(result)) {
     return null;
   }
 
-  const resultXdr = xdr.TransactionResult.fromXDR(
-    result.results[0].xdr,
-    "base64"
-  );
-  const stateRaw = scValToNative(resultXdr.result().value());
+  if (!result.result?.retval) {
+    return null;
+  }
+
+  const stateRaw = scValToNative(result.result.retval);
 
   if (!stateRaw) {
     return null;
@@ -430,30 +421,24 @@ export async function getUserProfile(userAddress: string): Promise<UserProfile |
   const contract = new Contract(REGISTRY_CONTRACT_ID);
 
   const result = await server.simulateTransaction(
-    new SorobanRpc.TransactionBuilder(
+    new TransactionBuilder(
       await server.getAccount(userAddress),
-      100
+      { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
     )
-      .setNetworkPassphrase("Test SDF Network ; September 2015")
       .addOperation(contract.call("get_user", nativeToScVal(userAddress, { type: "address" })))
       .setTimeout(30)
       .build()
   );
 
-  if (
-    result.error ||
-    !result.results ||
-    result.results.length === 0 ||
-    !result.results[0].xdr
-  ) {
+  if (SorobanRpc.Api.isSimulationError(result)) {
     return null;
   }
 
-  const resultXdr = xdr.TransactionResult.fromXDR(
-    result.results[0].xdr,
-    "base64"
-  );
-  const profileRaw = scValToNative(resultXdr.result().value());
+  if (!result.result?.retval) {
+    return null;
+  }
+
+  const profileRaw = scValToNative(result.result.retval);
 
   if (!profileRaw) {
     return null;
