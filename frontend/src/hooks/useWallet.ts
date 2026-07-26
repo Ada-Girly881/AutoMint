@@ -1,5 +1,9 @@
 import { useCallback } from "react";
-import { connectFreighter, getPublicKey, getNetwork } from "@stellar/freighter-api";
+import {
+  requestAccess,
+  getAddress,
+  getNetworkDetails,
+} from "@stellar/freighter-api";
 import { toast } from "sonner";
 import { useWalletStore } from "@/store/walletStore";
 
@@ -10,8 +14,16 @@ function isFreighterInstalled(): boolean {
 }
 
 export function useWallet() {
-  const { status, publicKey, network, error, setConnecting, setConnected, setError, disconnect } =
-    useWalletStore();
+  const {
+    status,
+    publicKey,
+    network,
+    error,
+    setConnecting,
+    setConnected,
+    setError,
+    disconnect,
+  } = useWalletStore();
 
   const connect = useCallback(async () => {
     if (!isFreighterInstalled()) {
@@ -24,13 +36,13 @@ export function useWallet() {
     toast.loading("Connecting wallet...", { id: "wallet-connect" });
 
     try {
-      await connectFreighter();
-      const pk = await getPublicKey();
-      const net = await getNetwork();
-      setConnected(pk, net.network passphrase);
+      const { address } = await requestAccess();
+      const net = await getNetworkDetails();
+      setConnected(address, net.networkPassphrase);
       toast.success("Wallet connected!", { id: "wallet-connect" });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to connect wallet";
+      const message =
+        err instanceof Error ? err.message : "Failed to connect wallet";
       setError(message);
       toast.error(message, { id: "wallet-connect" });
     }
