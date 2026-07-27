@@ -207,6 +207,16 @@ export async function cancelListing(
   );
 }
 
+export function parseListing(listing: Record<string, unknown>): MarketplaceListing {
+  return {
+    id: toBigInt(listing.id),
+    seller: String(listing.seller ?? ""),
+    bot_id: toBigInt(listing.bot_id),
+    price: toBigInt(listing.price),
+    listed_at: toBigInt(listing.listed_at),
+  };
+}
+
 /**
  * Get all active marketplace listings.
  * Returns array of listing objects.
@@ -237,6 +247,8 @@ export async function getActiveListings(
   } catch {
     return [];
   }
+
+  return listingsRaw.map((listing: Record<string, unknown>) => parseListing(listing));
 }
 
 /**
@@ -300,6 +312,8 @@ export async function getTotalUsers(sourceAddress?: string): Promise<number> {
   } catch {
     return 0;
   }
+
+  return listingsRaw.map((listing: Record<string, unknown>) => parseListing(listing));
 }
 
 /**
