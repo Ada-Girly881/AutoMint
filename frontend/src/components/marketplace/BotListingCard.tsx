@@ -1,74 +1,80 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Bot, Tag, TrendingUp } from "lucide-react";
+import { Bot, ShoppingCart, X, Zap, Tag } from "lucide-react";
 import clsx from "clsx";
 import {
+  BotTier,
   BOT_TIER_NAMES,
   BOT_TIER_COLORS,
   BOT_TIER_BG_COLORS,
+  TIER_META,
   stroopsToXlm,
 } from "@/types";
 import type { MarketplaceListing, BotNFT } from "@/types";
 
 interface BotListingCardProps {
   listing: MarketplaceListing;
-  bot?: BotNFT;
-  onBuy?: (listingId: bigint) => void;
-  onCancel?: (listingId: bigint) => void;
-  isOwner?: boolean;
-  loading?: boolean;
+  bot: BotNFT;
+  connectedAddress: string | null;
+  onBuy: (listingId: bigint) => void;
+  onCancel: (listingId: bigint) => void;
+  isBuying?: boolean;
+  isCancelling?: boolean;
+}
+
+function truncateAddress(address: string): string {
+  if (address.length <= 12) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 export default function BotListingCard({
   listing,
   bot,
+  connectedAddress,
   onBuy,
   onCancel,
-  isOwner = false,
-  loading = false,
+  isBuying = false,
+  isCancelling = false,
 }: BotListingCardProps) {
-  const tierName = bot ? (BOT_TIER_NAMES[bot.tier] ?? "Unknown") : "Unknown";
-  const tierColor = bot
-    ? (BOT_TIER_COLORS[bot.tier] ?? "text-muted")
-    : "text-muted";
-  const tierBg = bot
-    ? (BOT_TIER_BG_COLORS[bot.tier] ?? "bg-muted/20")
-    : "bg-muted/20";
-  const priceInXlm = stroopsToXlm(listing.price);
+  const tier = bot.tier as BotTier;
+  const tierName = BOT_TIER_NAMES[tier] ?? "Unknown";
+  const tierColor = BOT_TIER_COLORS[tier] ?? "text-muted";
+  const tierBg = BOT_TIER_BG_COLORS[tier] ?? "bg-muted/20";
+  const tierMeta = TIER_META[tier];
+  const priceXlm = stroopsToXlm(listing.price);
+  const isOwner =
+    connectedAddress !== null &&
+    listing.seller.toLowerCase() === connectedAddress.toLowerCase();
 
   return (
     <motion.div
-      data-testid="bot-listing-card"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
       className={clsx(
         "relative rounded-2xl border border-liner bg-card p-5",
         "flex flex-col gap-4",
-        "hover:border-white/10 transition-colors",
+        "hover:border-white/10 transition-colors"
       )}
+      data-testid={`listing-card-${listing.id.toString()}`}
     >
+      {/* Header: tier icon + name + tier badge */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div
             className={clsx(
-              "flex h-11 w-11 items-center justify-center rounded-xl",
-              tierBg,
+              "flex h-11 w-11 items-center justify-center rounded-xl text-xl",
+              tierBg
             )}
           >
-            <Bot className={clsx("h-5 w-5", tierColor)} />
+            {tierMeta?.emoji ?? <Bot className={clsx("h-5 w-5", tierColor)} />}
           </div>
           <div>
-            <p
-              className="font-display text-sm font-semibold text-text"
-              data-testid="bot-name"
-            >
-              {bot?.name || tierName}
+            <p className="font-display text-sm font-semibold text-text">
+              {bot.name || tierName} Bot
             </p>
-            <p className="text-xs text-muted" data-testid="bot-id">
-              #{listing.bot_id.toString()}
-            </p>
+            <p className="text-xs text-muted">#{bot.id.toString()}</p>
           </div>
         </div>
 
@@ -77,84 +83,85 @@ export default function BotListingCard({
             "inline-flex items-center rounded-full px-2.5 py-0.5",
             "text-xs font-medium",
             tierBg,
-            tierColor,
+            tierColor
           )}
-          data-testid="bot-tier"
         >
           {tierName}
         </span>
       </div>
 
-      {bot && (
+      {/* Stats: rate + price */}
+      <div className="grid grid-cols-2 gap-3">
         <div className="flex items-center gap-2 rounded-lg bg-card-2 px-3 py-2">
-          <TrendingUp className="h-3.5 w-3.5 text-gold" />
+          <Zap className="h-3.5 w-3.5 text-gold" />
           <div>
             <p className="text-[10px] uppercase tracking-wider text-muted">
-              Accrual Rate
+              Rate
             </p>
-            <p
-              className="text-sm font-semibold text-text"
-              data-testid="accrual-rate"
-            >
+            <p className="text-sm font-semibold text-text">
               {bot.accrual_rate.toString()}{" "}
               <span className="text-xs font-normal text-muted">pt/hr</span>
             </p>
           </div>
         </div>
-      )}
 
-      <div className="flex items-center justify-between pt-2 border-t border-liner">
-        <div>
-          <p className="text-xs text-muted">Price</p>
-          <p
-            className="font-display text-lg font-bold text-gold"
-            data-testid="listing-price"
-          >
-            {priceInXlm.toFixed(2)} XLM
-          </p>
+        <div className="flex items-center gap-2 rounded-lg bg-card-2 px-3 py-2">
+          <Tag className="h-3.5 w-3.5 text-green" />
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted">
+              Price
+            </p>
+            <p className="text-sm font-semibold text-text">
+              {priceXlm.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
+              <span className="text-xs font-normal text-muted">XLM</span>
+            </p>
+          </div>
         </div>
-
-        {isOwner ? (
-          <button
-            onClick={() => onCancel?.(listing.id)}
-            disabled={loading}
-            data-testid="cancel-listing-button"
-            className={clsx(
-              "flex items-center justify-center gap-2",
-              "rounded-xl border border-liner bg-card-2 px-4 py-2.5",
-              "text-sm font-medium text-text",
-              "hover:bg-red-500/10 hover:border-red-500/20 transition-colors",
-              "disabled:opacity-50 disabled:cursor-not-allowed",
-            )}
-          >
-            Cancel Listing
-          </button>
-        ) : (
-          <button
-            onClick={() => onBuy?.(listing.id)}
-            disabled={loading}
-            data-testid="buy-button"
-            className={clsx(
-              "flex items-center justify-center gap-2",
-              "rounded-xl border border-gold/30 bg-gold/10 px-4 py-2.5",
-              "text-sm font-medium text-gold",
-              "hover:bg-gold/20 hover:border-gold/50 transition-colors",
-              "disabled:opacity-50 disabled:cursor-not-allowed",
-            )}
-          >
-            <Tag className="h-3.5 w-3.5" />
-            Buy Now
-          </button>
-        )}
       </div>
 
-      {isOwner && (
-        <div
-          className="absolute top-3 right-3 px-2 py-1 rounded-md bg-blue/20 text-blue text-xs font-medium"
-          data-testid="owner-badge"
+      {/* Seller */}
+      <div className="flex items-center justify-between rounded-lg bg-card-2 px-3 py-2">
+        <span className="text-[10px] uppercase tracking-wider text-muted">
+          Seller
+        </span>
+        <span className="font-mono text-xs text-text" title={listing.seller}>
+          {truncateAddress(listing.seller)}
+        </span>
+      </div>
+
+      {/* Action button */}
+      {isOwner ? (
+        <button
+          onClick={() => onCancel(listing.id)}
+          disabled={isCancelling}
+          data-testid={`cancel-btn-${listing.id.toString()}`}
+          className={clsx(
+            "flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5",
+            "text-sm font-medium transition-all",
+            isCancelling
+              ? "border-liner bg-card-2 text-muted cursor-not-allowed opacity-50"
+              : "border-pink/30 bg-pink/10 text-pink hover:bg-pink/20 hover:border-pink/50"
+          )}
         >
-          Your Listing
-        </div>
+          <X className="h-4 w-4" />
+          {isCancelling ? "Cancelling..." : "Cancel Listing"}
+        </button>
+      ) : (
+        <button
+          onClick={() => onBuy(listing.id)}
+          disabled={isBuying || !connectedAddress}
+          data-testid={`buy-btn-${listing.id.toString()}`}
+          className={clsx(
+            "flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5",
+            "text-sm font-medium transition-all",
+            isBuying || !connectedAddress
+              ? "border-liner bg-card-2 text-muted cursor-not-allowed opacity-50"
+              : "border-gold/30 bg-gold/10 text-gold hover:bg-gold/20 hover:border-gold/50"
+          )}
+        >
+          <ShoppingCart className="h-4 w-4" />
+          {isBuying ? "Buying..." : "Buy"}
+        </button>
       )}
     </motion.div>
   );
