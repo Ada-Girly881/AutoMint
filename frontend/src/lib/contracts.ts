@@ -369,6 +369,61 @@ export async function getAccrualState(userAddress: string): Promise<AccrualState
 }
 
 /**
+ * Get pending (unclaimed) points accrued for a user since their last claim.
+ * Calls the accrual contract's pending_points() function.
+ */
+export async function getPendingPoints(userAddress: string): Promise<bigint> {
+  const server = getServer();
+  const contract = new Contract(ACCRUAL_CONTRACT_ID);
+
+  const result = await server.simulateTransaction(
+    new TransactionBuilder(
+      await server.getAccount(userAddress),
+      { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
+    )
+      .addOperation(contract.call("pending_points", nativeToScVal(userAddress, { type: "address" })))
+      .setTimeout(30)
+      .build()
+  );
+
+  if (SorobanRpc.Api.isSimulationError(result)) {
+    return BigInt(0);
+  }
+
+  if (!result.result?.retval) {
+    return BigInt(0);
+  }
+
+  return toBigInt(scValToNative(result.result.retval));
+}
+
+/**
+ * Claim accrued points, converting them to AMT tokens where the points
+ * threshold is met. Calls the accrual contract's claim() function.
+ */
+export async function claimPoints(userAddress: string): Promise<string> {
+  const server = getServer();
+  const contract = new Contract(ACCRUAL_CONTRACT_ID);
+
+  const txBuilder = new TransactionBuilder(
+    await server.getAccount(userAddress),
+    { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
+  )
+    .addOperation(
+      contract.call(
+        "claim",
+        nativeToScVal(userAddress, { type: "address" }),
+        nativeToScVal(TOKEN_CONTRACT_ID, { type: "address" }),
+        nativeToScVal(REGISTRY_CONTRACT_ID, { type: "address" })
+      )
+    )
+    .setTimeout(30)
+    .build();
+
+  return txBuilder.toXDR();
+}
+
+/**
  * Get user profile from the registry contract.
  */
 export async function getUserProfile(userAddress: string): Promise<UserProfile | null> {
@@ -385,4 +440,126 @@ export async function getUserProfile(userAddress: string): Promise<UserProfile |
   } catch {
     return null;
   }
+}
+
+/**
+ * Check whether a user is registered in the registry contract.
+ */
+export async function isRegistered(userAddress: string): Promise<boolean> {
+  const server = getServer();
+  const contract = new Contract(REGISTRY_CONTRACT_ID);
+
+  const result = await server.simulateTransaction(
+    new TransactionBuilder(
+      await server.getAccount(userAddress),
+      { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
+    )
+      .addOperation(contract.call("is_registered", nativeToScVal(userAddress, { type: "address" })))
+      .setTimeout(30)
+      .build()
+  );
+
+  if (SorobanRpc.Api.isSimulationError(result)) {
+    return false;
+  }
+
+  if (!result.result?.retval) {
+    return false;
+  }
+
+  return Boolean(scValToNative(result.result.retval));
+}
+
+/**
+ * Get the list of bot IDs owned by a user from the bot_nft contract.
+ */
+export async function getUserBots(userAddress: string): Promise<bigint[]> {
+  const server = getServer();
+  const contract = new Contract(BOT_NFT_CONTRACT_ID);
+
+  const result = await server.simulateTransaction(
+    new TransactionBuilder(
+      await server.getAccount(userAddress),
+      { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
+    )
+      .addOperation(contract.call("get_user_bots", nativeToScVal(userAddress, { type: "address" })))
+      .setTimeout(30)
+      .build()
+  );
+
+  if (SorobanRpc.Api.isSimulationError(result)) {
+    return [];
+  }
+
+  if (!result.result?.retval) {
+    return [];
+  }
+
+  const raw = scValToNative(result.result.retval);
+  if (!Array.isArray(raw)) return [];
+
+  return raw.map((id) => toBigInt(id));
+}
+
+/**
+ * Get a single bot's full record by ID from the bot_nft contract.
+ */
+export async function getBotById(
+  userAddress: string,
+  botId: bigint
+): Promise<BotNFT | null> {
+  const server = getServer();
+  const contract = new Contract(BOT_NFT_CONTRACT_ID);
+
+  const result = await server.simulateTransaction(
+    new TransactionBuilder(
+      await server.getAccount(userAddress),
+      { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
+    )
+      .addOperation(contract.call("get_bot", nativeToScVal(botId, { type: "u64" })))
+      .setTimeout(30)
+      .build()
+  );
+
+  if (SorobanRpc.Api.isSimulationError(result)) {
+    return null;
+  }
+
+  if (!result.result?.retval) {
+    return null;
+  }
+
+  const raw = scValToNative(result.result.retval);
+  if (!raw) return null;
+
+  return parseBotNFT(raw as Record<string, unknown>);
+}
+
+/**
+ * Get a user's combined accrual rate across all owned bots from the
+ * bot_nft contract.
+ */
+export async function getUserTotalRate(userAddress: string): Promise<bigint> {
+  const server = getServer();
+  const contract = new Contract(BOT_NFT_CONTRACT_ID);
+
+  const result = await server.simulateTransaction(
+    new TransactionBuilder(
+      await server.getAccount(userAddress),
+      { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
+    )
+      .addOperation(contract.call("get_user_total_rate", nativeToScVal(userAddress, { type: "address" })))
+      .setTimeout(30)
+      .build()
+  );
+
+  if (SorobanRpc.Api.isSimulationError(result)) {
+    return BigInt(0);
+  }
+
+  if (!result.result?.retval) {
+    return BigInt(0);
+  }
+
+  return toBigInt(scValToNative(result.result.retval));
 }
