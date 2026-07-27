@@ -1,22 +1,27 @@
 import { create } from "zustand";
 
+type WalletStatus = "disconnected" | "connecting" | "connected" | "error";
+
 interface WalletState {
-  address: string | null;
-  connected: boolean;
+  status: WalletStatus;
+  publicKey: string | null;
   network: string | null;
-  setAddress: (address: string | null) => void;
-  setNetwork: (network: string | null) => void;
-  connect: (address: string, network?: string) => void;
+  error: string | null;
+  setConnecting: () => void;
+  setConnected: (publicKey: string, network: string) => void;
+  setError: (error: string) => void;
   disconnect: () => void;
 }
 
 export const useWalletStore = create<WalletState>((set) => ({
-  address: null,
-  connected: false,
+  status: "disconnected",
+  publicKey: null,
   network: null,
-  setAddress: (address) => set({ address, connected: !!address }),
-  setNetwork: (network) => set({ network }),
-  connect: (address, network = "TESTNET") =>
-    set({ address, connected: true, network }),
-  disconnect: () => set({ address: null, connected: false, network: null }),
+  error: null,
+  setConnecting: () => set({ status: "connecting", error: null }),
+  setConnected: (publicKey, network) =>
+    set({ status: "connected", publicKey, network, error: null }),
+  setError: (error) => set({ status: "error", error }),
+  disconnect: () =>
+    set({ status: "disconnected", publicKey: null, network: null, error: null }),
 }));

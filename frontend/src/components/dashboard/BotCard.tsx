@@ -73,7 +73,7 @@ export default function BotCard({ bot, onListForSale }: BotCardProps) {
               Rate
             </p>
             <p className="text-sm font-semibold text-text">
-              {bot.accrual_rate} <span className="text-xs font-normal text-muted">pt/hr</span>
+              {bot.accrual_rate.toString()} <span className="text-xs font-normal text-muted">pt/hr</span>
             </p>
           </div>
         </div>
