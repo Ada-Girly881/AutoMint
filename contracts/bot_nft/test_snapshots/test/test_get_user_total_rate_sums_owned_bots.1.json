@@ -240,6 +240,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "accrual_rate"
+                      },
+                      "val": {
+                        "u64": 1
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "id"
                       },
                       "val": {
@@ -248,18 +256,26 @@
                     },
                     {
                       "key": {
-                        "symbol": "owner"
+                        "symbol": "minted_at"
                       },
                       "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                        "u64": 0
                       }
                     },
                     {
                       "key": {
-                        "symbol": "rate"
+                        "symbol": "name"
                       },
                       "val": {
-                        "u64": 10
+                        "string": "Basic Bot"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "owner"
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                       }
                     },
                     {
@@ -318,6 +334,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "accrual_rate"
+                      },
+                      "val": {
+                        "u64": 5
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "id"
                       },
                       "val": {
@@ -326,18 +350,26 @@
                     },
                     {
                       "key": {
-                        "symbol": "owner"
+                        "symbol": "minted_at"
                       },
                       "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                        "u64": 0
                       }
                     },
                     {
                       "key": {
-                        "symbol": "rate"
+                        "symbol": "name"
                       },
                       "val": {
-                        "u64": 25
+                        "string": "Bronze Bot"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "owner"
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                       }
                     },
                     {
@@ -396,6 +428,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "accrual_rate"
+                      },
+                      "val": {
+                        "u64": 25
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "id"
                       },
                       "val": {
@@ -404,18 +444,26 @@
                     },
                     {
                       "key": {
-                        "symbol": "owner"
+                        "symbol": "minted_at"
                       },
                       "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                        "u64": 0
                       }
                     },
                     {
                       "key": {
-                        "symbol": "rate"
+                        "symbol": "name"
                       },
                       "val": {
-                        "u64": 50
+                        "string": "Silver Bot"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "owner"
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                       }
                     },
                     {
@@ -2137,7 +2185,7 @@
               }
             ],
             "data": {
-              "u64": 85
+              "u64": 31
             }
           }
         }

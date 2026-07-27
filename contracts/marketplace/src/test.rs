@@ -281,6 +281,16 @@ fn test_cancel_already_cancelled_listing_fails() {
 }
 
 #[test]
+fn test_cancel_listing_not_found() {
+    let h = setup();
+    let seller = Address::generate(&h.env);
+    assert_eq!(
+        h.mkt.try_cancel_listing(&seller, &404_u64),
+        Err(Ok(MarketplaceError::ListingNotFound))
+    );
+}
+
+#[test]
 fn test_cancel_listing_by_non_seller_fails() {
     let h = setup();
     let seller = Address::generate(&h.env);

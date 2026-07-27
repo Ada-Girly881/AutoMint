@@ -10,12 +10,19 @@ export const SOROBAN_RPC_URL =
   process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? "https://soroban-testnet.stellar.org";
 
 /** Stellar network passphrase used when signing transactions. */
-export const STELLAR_NETWORK_PASSPHRASE =
+export const NETWORK_PASSPHRASE =
   process.env.NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE ??
   "Test SDF Network ; September 2015";
 
+/** Alias kept for backward compatibility. */
+export const STELLAR_NETWORK_PASSPHRASE = NETWORK_PASSPHRASE;
+
 /** Human-readable network label, e.g. "TESTNET". */
 export const NETWORK = process.env.NEXT_PUBLIC_NETWORK ?? "TESTNET";
+
+/** Horizon URL for account/transaction queries. */
+export const HORIZON_URL =
+  process.env.NEXT_PUBLIC_HORIZON_URL ?? "https://horizon-testnet.stellar.org";
 
 /** Contract IDs */
 export const REGISTRY_CONTRACT_ID =
@@ -32,3 +39,27 @@ export const MARKETPLACE_CONTRACT_ID =
 
 export const TOKEN_CONTRACT_ID =
   process.env.NEXT_PUBLIC_TOKEN_CONTRACT_ID ?? "";
+
+export const CONTRACT_ADDRESSES = {
+  registry: REGISTRY_CONTRACT_ID,
+  botNft: BOT_NFT_CONTRACT_ID,
+  accrual: ACCRUAL_CONTRACT_ID,
+  marketplace: MARKETPLACE_CONTRACT_ID,
+  token: TOKEN_CONTRACT_ID,
+} as const;
+
+/** Transaction tunables */
+export const TX_TIMEOUT = Number(process.env.NEXT_PUBLIC_TX_TIMEOUT) || 30;
+export const BASE_FEE = process.env.NEXT_PUBLIC_BASE_FEE ?? "100";
+
+/** Points-to-AMT conversion threshold. */
+export const POINTS_PER_AMT = Number(process.env.NEXT_PUBLIC_POINTS_PER_AMT) || 1000;
+
+/** Leaderboard pagination limit. */
+export const LEADERBOARD_LIMIT = Number(process.env.NEXT_PUBLIC_LEADERBOARD_LIMIT) || 50;
+
+/** Polling interval when waiting for a transaction to complete (ms). */
+export const POLL_INTERVAL_MS = Number(process.env.NEXT_PUBLIC_POLL_INTERVAL_MS) || 1000;
+
+/** Tick interval used by the accrual counter (ms). */
+export const COUNTER_TICK_MS = Number(process.env.NEXT_PUBLIC_COUNTER_TICK_MS) || 1000;
