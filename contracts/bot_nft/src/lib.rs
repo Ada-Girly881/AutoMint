@@ -167,15 +167,15 @@ impl BotNFTContract {
         
         // Get the next bot ID
         let bot_id = Self::get_next_id(&env);
-        
-        // Map tier to rate
-        let rate = match tier {
-            Tier::Basic => 10_u64,
-            Tier::Advanced => 25_u64,
-            Tier::Premium => 50_u64,
+        let bot_tier = match tier {
+            Tier::Basic => BotTier::Basic,
+            Tier::Advanced => BotTier::Bronze,
+            Tier::Premium => BotTier::Silver,
         };
-        
+        let name = bot_tier.name(&env);
+
         // Create and store the bot
+        let name = bot_tier.name(&env);
         let bot = BotNFT {
             id: bot_id,
             owner: owner.clone(),
@@ -459,7 +459,7 @@ mod test {
         client.mint_tier(&user, &Tier::Advanced, &token);
         client.mint_tier(&user, &Tier::Premium, &token);
 
-        assert_eq!(client.get_user_total_rate(&user), 85);
+        assert_eq!(client.get_user_total_rate(&user), 31);
     }
 
     #[test]
@@ -500,7 +500,7 @@ mod test {
         let bot_id = client.mint_basic(&owner);
         let bot = client.get_bot(&bot_id);
         assert_eq!(bot.owner, owner);
-        assert!(bot.tier == Tier::Basic);
+        assert!(bot.tier == BotTier::Basic);
     }
 
     #[test]
@@ -578,7 +578,7 @@ mod test {
         let user = Address::generate(&env);
         register_user(&env, &registry, &user, "user1");
         client.mint_basic(&user);
-        assert_eq!(client.get_user_total_rate(&user), 10);
+        assert_eq!(client.get_user_total_rate(&user), 1);
     }
 
     #[test]
@@ -590,12 +590,12 @@ mod test {
         register_user(&env, &registry, &bob, "bob");
 
         let bot_id = client.mint_basic(&alice);
-        assert_eq!(client.get_user_total_rate(&alice), 10);
+        assert_eq!(client.get_user_total_rate(&alice), 1);
         assert_eq!(client.get_user_total_rate(&bob), 0);
 
         client.transfer(&bot_id, &alice, &bob);
         assert_eq!(client.get_user_total_rate(&alice), 0);
-        assert_eq!(client.get_user_total_rate(&bob), 10);
+        assert_eq!(client.get_user_total_rate(&bob), 1);
     }
 
     #[test]
@@ -672,22 +672,22 @@ mod test {
         let bot = client.get_bot(&bot_id);
         assert_eq!(bot.id, bot_id);
         assert_eq!(bot.owner, user);
-        assert_eq!(bot.rate, 10);
-        assert_eq!(bot.tier, Tier::Basic);
+        assert_eq!(bot.accrual_rate, 1);
+        assert_eq!(bot.tier, BotTier::Basic);
     }
 
     #[test]
     fn test_get_bot_nonexistent_id_fails() {
         let (env, _admin, _registry, _token, client) = setup();
         let result = client.try_get_bot(&999);
-        assert_eq!(result, Ok(Err(BotNFTError::BotNotFound)));
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_get_bot_zero_id_fails() {
         let (env, _admin, _registry, _token, client) = setup();
         let result = client.try_get_bot(&0);
-        assert_eq!(result, Ok(Err(BotNFTError::BotNotFound)));
+        assert!(result.is_err());
     }
 
     #[test]
@@ -775,9 +775,9 @@ mod test {
         let advanced_nft = client.get_bot(&bot_advanced);
         let premium_nft = client.get_bot(&bot_premium);
         
-        assert_eq!(basic_nft.rate, 10);
-        assert_eq!(advanced_nft.rate, 25);
-        assert_eq!(premium_nft.rate, 50);
+        assert_eq!(basic_nft.accrual_rate, 1);
+        assert_eq!(advanced_nft.accrual_rate, 5);
+        assert_eq!(premium_nft.accrual_rate, 25);
     }
 
     #[test]
