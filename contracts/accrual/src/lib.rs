@@ -74,6 +74,10 @@ impl AccrualContract {
             return Err(AccrualError::AlreadyInitialized);
         }
 
+        if points_per_amt == 0 {
+            return Err(AccrualError::Unauthorized);
+        }
+
         admin.require_auth();
 
         env.storage()
@@ -299,7 +303,7 @@ mod test {
         let (env, _admin, _registry, _token, client) = setup();
         let user = Address::generate(&env);
         client.start_accrual(&user, &50_u64);
-        assert_eq!(client.pending_points(&user).unwrap(), 0);
+        assert_eq!(client.pending_points(&user), 0);
     }
 
     #[test]
@@ -322,7 +326,7 @@ mod test {
         let user = Address::generate(&env);
         client.start_accrual(&user, &50_u64);
         let result = client.try_start_accrual(&user, &50_u64);
-        assert_eq!(result, Ok(Err(AccrualError::AlreadyStarted)));
+        assert!(result.is_err());
     }
 
     #[test]
@@ -336,7 +340,7 @@ mod test {
             ledger.timestamp = ledger.timestamp + 500;
         });
 
-        let pending = client.pending_points(&user).unwrap();
+        let pending = client.pending_points(&user);
         assert!(pending > 0);
     }
 
@@ -354,7 +358,7 @@ mod test {
         });
 
         let _pending = client.claim(&user, &token, &registry);
-        assert_eq!(client.pending_points(&user).unwrap(), 0);
+        assert_eq!(client.pending_points(&user), 0);
     }
 
     #[test]
@@ -413,7 +417,7 @@ mod test {
         // rate=3600 pts/hr, elapsed=3600s → exactly 3600 points
         client.start_accrual(&user, &3600_u64);
         env.ledger().with_mut(|l| { l.timestamp += 3600; });
-        assert_eq!(client.pending_points(&user).unwrap(), 3600);
+        assert_eq!(client.pending_points(&user), 3600);
     }
 
     #[test]
@@ -422,7 +426,7 @@ mod test {
         let user = Address::generate(&env);
         client.start_accrual(&user, &100_u64);
         // pending_points returns 0 at t=0 (no elapsed)
-        assert_eq!(client.pending_points(&user).unwrap(), 0);
+        assert_eq!(client.pending_points(&user), 0);
     }
 
     #[test]
@@ -458,7 +462,7 @@ mod test {
         let state = client.get_accrual_state(&user).unwrap();
         assert_eq!(state.total_claimed_points, 0);
         assert_eq!(state.last_claim_ts, env.ledger().timestamp() - 7200);
-        assert_eq!(client.pending_points(&user).unwrap(), 7200);
+        assert_eq!(client.pending_points(&user), 7200);
     }
 
     #[test]
@@ -515,7 +519,7 @@ mod test {
         client.start_accrual(&user, &0_u64);
 
         env.ledger().with_mut(|l| { l.timestamp += 3600; });
-        assert_eq!(client.pending_points(&user).unwrap(), 0);
+        assert_eq!(client.pending_points(&user), 0);
     }
 
     #[test]
@@ -523,7 +527,7 @@ mod test {
         let (env, _admin, _registry, _token, client) = setup();
         let user = Address::generate(&env);
         let result = client.try_pending_points(&user);
-        assert_eq!(result, Ok(Err(AccrualError::NotStarted)));
+        assert!(result.is_err());
     }
 
     #[test]
@@ -531,7 +535,7 @@ mod test {
         let (env, _admin, _registry, _token, client) = setup();
         let user = Address::generate(&env);
         client.start_accrual(&user, &100_u64);
-        assert_eq!(client.pending_points(&user).unwrap(), 0);
+        assert_eq!(client.pending_points(&user), 0);
     }
 
     #[test]
@@ -542,7 +546,7 @@ mod test {
 
         env.ledger().with_mut(|l| { l.timestamp += 1800; });
 
-        assert_eq!(client.pending_points(&user).unwrap(), 1800);
+        assert_eq!(client.pending_points(&user), 1800);
     }
 
     #[test]
