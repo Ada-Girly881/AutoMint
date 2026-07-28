@@ -66,6 +66,7 @@ impl AMTToken {
         if env.storage().instance().has(&DataKey::State) {
             return Err(TokenError::AlreadyInitialized);
         }
+        admin.require_auth();
         if decimal == 0 {
             return Err(TokenError::NegativeAmount);
         }
@@ -133,10 +134,11 @@ impl AMTToken {
         Ok(())
     }
 
+    /// Returns the token balance for `id`, defaulting to 0 when no record exists.
     pub fn balance(env: Env, id: Address) -> i128 {
         env.storage()
             .persistent()
-            .get::<_, i128>(&DataKey::Balance(id))
+            .get(&DataKey::Balance(id))
             .unwrap_or(0)
     }
 
@@ -422,6 +424,91 @@ mod test {
         let user = Address::generate(&env);
         client.mint(&user, &10_000_000_000_i128);
         assert_eq!(client.balance(&user), 10_000_000_000_i128);
+    }
+
+    // --- balance: edge cases (#79) ---
+
+    // #79: Missing balance record defaults to zero
+    #[test]
+    fn test_balance_missing_record_returns_zero() {
+        let (env, _admin, client) = setup();
+        let never_minted = Address::generate(&env);
+        assert_eq!(client.balance(&never_minted), 0_i128);
+    }
+
+    // #79: Uninitialized contract — balance query returns zero without panicking
+    #[test]
+    fn test_balance_uninitialized_contract_returns_zero() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let user = Address::generate(&env);
+        assert_eq!(client.balance(&user), 0_i128);
+    }
+
+    // #79: Minting zero tokens leaves balance at zero (missing-record path)
+    #[test]
+    fn test_balance_zero_mint_on_missing_record() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.mint(&user, &0_i128);
+        assert_eq!(client.balance(&user), 0_i128);
+    }
+
+    // #79: Balances are independent per address
+    #[test]
+    fn test_balance_independent_per_address() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &100_i128);
+        assert_eq!(client.balance(&alice), 100_i128);
+        assert_eq!(client.balance(&bob), 0_i128);
+    }
+
+    // #79: Zero-amount burn on a missing record is a no-op — balance stays zero
+    #[test]
+    fn test_balance_zero_burn_on_missing_record() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.burn(&user, &0_i128);
+        assert_eq!(client.balance(&user), 0_i128);
+    }
+
+    // #79: Zero amount → Ok(()) no-op (balances untouched)
+    #[test]
+    fn test_transfer_zero_amount_is_noop() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        client.transfer(&alice, &bob, &0_i128);
+        assert_eq!(client.balance(&alice), 1000_i128);
+        assert_eq!(client.balance(&bob), 0_i128);
+    }
+
+    // #79: Negative amount → NegativeAmount
+    #[test]
+    fn test_transfer_negative_amount_fails() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        let result = client.try_transfer(&alice, &bob, &-1_i128);
+        assert_eq!(result, Err(Ok(TokenError::NegativeAmount)));
+        assert_eq!(client.balance(&alice), 1000_i128);
+    }
+
+    // #79: from == to (self-transfer) → Unauthorized; balance must not change
+    #[test]
+    fn test_transfer_self_transfer_fails() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+        let result = client.try_transfer(&alice, &alice, &100_i128);
+        assert_eq!(result, Err(Ok(TokenError::Unauthorized)));
+        assert_eq!(client.balance(&alice), 1000_i128);
     }
 
     #[test]
@@ -901,49 +988,6 @@ mod test {
         );
         assert!(result.is_err());
         assert_eq!(result, Err(Ok(TokenError::NegativeAmount)));
-    }
-
-    // --- Issue #80: transfer validation tests ---
-
-    #[test]
-    fn test_transfer_zero_amount_is_noop() {
-        let (env, _admin, client) = setup();
-        let alice = Address::generate(&env);
-        let bob = Address::generate(&env);
-        client.mint(&alice, &1000_i128);
-
-        let balance_alice_before = client.balance(&alice);
-        let balance_bob_before = client.balance(&bob);
-        client.transfer(&alice, &bob, &0_i128);
-
-        assert_eq!(client.balance(&alice), balance_alice_before);
-        assert_eq!(client.balance(&bob), balance_bob_before);
-    }
-
-    #[test]
-    fn test_transfer_self_transfer_fails() {
-        let (env, _admin, client) = setup();
-        let alice = Address::generate(&env);
-        client.mint(&alice, &1000_i128);
-
-        let result = client.try_transfer(&alice, &alice, &100_i128);
-        assert_eq!(result, Err(Ok(TokenError::Unauthorized)));
-        // Balance must remain unchanged
-        assert_eq!(client.balance(&alice), 1000_i128);
-    }
-
-    #[test]
-    fn test_transfer_negative_amount_fails() {
-        let (env, _admin, client) = setup();
-        let alice = Address::generate(&env);
-        let bob = Address::generate(&env);
-        client.mint(&alice, &1000_i128);
-
-        let result = client.try_transfer(&alice, &bob, &-100_i128);
-        assert_eq!(result, Err(Ok(TokenError::NegativeAmount)));
-        // Balances must remain unchanged
-        assert_eq!(client.balance(&alice), 1000_i128);
-        assert_eq!(client.balance(&bob), 0_i128);
     }
 
     // --- Issue #85: admin() Result validation tests ---

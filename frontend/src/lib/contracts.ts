@@ -4,6 +4,7 @@ import {
   TransactionBuilder,
   scValToNative,
   nativeToScVal,
+  xdr,
 } from "@stellar/stellar-sdk";
 import {
   REGISTRY_CONTRACT_ID,
@@ -13,20 +14,58 @@ import {
   ACCRUAL_CONTRACT_ID,
   STELLAR_NETWORK_PASSPHRASE,
 } from "./constants";
-import { getServer } from "./stellar";
+import { getServer, simulateContractCall } from "./stellar";
 import type { BotNFT, UserProfile, BotTier, MarketplaceListing, AccrualState } from "@/types";
 
 const toBigInt = (v: unknown): bigint =>
   typeof v === "bigint" ? v : BigInt(String(v ?? 0));
 
 /**
+ * Resolve the source address used for read-only simulations that have no
+ * natural per-user address. Simulations don't sign, so any loadable account
+ * works; the connected wallet's public key is the sensible default.
+ */
+function defaultSource(sourceAddress?: string): string {
+  if (sourceAddress) return sourceAddress;
+  if (typeof window !== "undefined" && (window as any).selectedPublicKey) {
+    return (window as any).selectedPublicKey as string;
+  }
+  throw new Error("No source address available for contract simulation");
+}
+
+/**
+ * Build a state-changing transaction that invokes `method(...args)` on
+ * `contractId` and return its base64 XDR for the wallet to sign.
+ */
+async function buildTxXdr(
+  contractId: string,
+  method: string,
+  args: xdr.ScVal[],
+  sourceAddress: string
+): Promise<string> {
+  const server = getServer();
+  const contract = new Contract(contractId);
+  const account = await server.getAccount(sourceAddress);
+
+  const tx = new TransactionBuilder(account, {
+    fee: "100",
+    networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
+  })
+    .addOperation(contract.call(method, ...args))
+    .setTimeout(30)
+    .build();
+
+  return tx.toXDR();
+}
+
+/**
  * Parse a raw scVal map from the registry contract into a typed UserProfile.
- * Handles the tier enum being returned as a string, array, or object.
+ * The on-chain struct exposes `total_points`; older shapes used `points`.
  */
 export function parseUserProfile(
   rawData: Record<string, unknown>
 ): UserProfile {
-  const raw = rawData.points;
+  const raw = rawData.total_points ?? rawData.points;
   const points = typeof raw === "bigint" ? raw : BigInt(String(raw ?? 0));
   return {
     username: String(rawData.username ?? ""),
@@ -74,30 +113,13 @@ export function parseBotNFT(rawData: Record<string, unknown>): BotNFT {
  * Calls token contract's balance() function.
  */
 export async function getAmtBalance(userAddress: string): Promise<bigint> {
-  const server = getServer();
-  const contract = new Contract(TOKEN_CONTRACT_ID);
-
-  const result = await server.simulateTransaction(
-    new TransactionBuilder(
-      await server.getAccount(userAddress), { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
-    )
-      .addOperation(
-        contract.call("balance", nativeToScVal(userAddress, { type: "address" }))
-      )
-      .setTimeout(30)
-      .build()
+  const balance = await simulateContractCall(
+    TOKEN_CONTRACT_ID,
+    "balance",
+    [nativeToScVal(userAddress, { type: "address" })],
+    userAddress
   );
-
-  if (SorobanRpc.Api.isSimulationError(result)) {
-    throw new Error("Failed to get AMT balance");
-  }
-
-  if (!result.result?.retval) {
-    throw new Error("No return value from simulation");
-  }
-
-  const balance = scValToNative(result.result.retval);
-  return BigInt(balance ?? 0);
+  return toBigInt(balance);
 }
 
 /**
@@ -109,24 +131,15 @@ export async function listBot(
   botId: bigint,
   price: bigint
 ): Promise<string> {
-  const server = getServer();
-  const contract = new Contract(MARKETPLACE_CONTRACT_ID);
-
-  const txBuilder = new TransactionBuilder(
-    await server.getAccount(userAddress),
-    { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
-  )
-    .addOperation(
-      contract.call(
-        "list_bot",
-        nativeToScVal(botId, { type: "u128" }),
-        nativeToScVal(price, { type: "u128" })
-      )
-    )
-    .setTimeout(30)
-    .build();
-
-  return txBuilder.toXDR();
+  return buildTxXdr(
+    MARKETPLACE_CONTRACT_ID,
+    "list_bot",
+    [
+      nativeToScVal(botId, { type: "u128" }),
+      nativeToScVal(price, { type: "u128" }),
+    ],
+    userAddress
+  );
 }
 
 /**
@@ -134,73 +147,49 @@ export async function listBot(
  * Transfers AMT tokens to seller and bot to buyer.
  */
 export async function buyBot(address: string, listingId: number): Promise<string> {
-  const server = getServer();
-  const contract = new Contract(MARKETPLACE_CONTRACT_ID);
-
-  const txBuilder = new TransactionBuilder(
-    await server.getAccount(address), { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
-  )
-    .addOperation(
-      contract.call("buy_bot", nativeToScVal(listingId, { type: "u128" }))
-    )
-    .setTimeout(30)
-    .build();
-
-  return txBuilder.toXDR();
+  return buildTxXdr(
+    MARKETPLACE_CONTRACT_ID,
+    "buy_bot",
+    [nativeToScVal(listingId, { type: "u128" })],
+    address
+  );
 }
 
 /**
  * Fetch the leaderboard of top users by points.
  */
-export async function getLeaderboard(limit: number = 50): Promise<UserProfile[]> {
-  const server = getServer();
-  const contract = new Contract(REGISTRY_CONTRACT_ID);
-
-  const result = await server.simulateTransaction(
-    new TransactionBuilder(
-      await server.getAccount((window as any).selectedPublicKey), { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
-    )
-      .addOperation(
-        contract.call("leaderboard", nativeToScVal(limit, { type: "u32" }))
-      )
-      .setTimeout(30)
-      .build()
-  );
-
-  if (SorobanRpc.Api.isSimulationError(result)) {
+export async function getLeaderboard(
+  limit: number = 50,
+  sourceAddress?: string
+): Promise<UserProfile[]> {
+  try {
+    const raw = await simulateContractCall(
+      REGISTRY_CONTRACT_ID,
+      "get_leaderboard",
+      [nativeToScVal(limit, { type: "u32" })],
+      defaultSource(sourceAddress)
+    );
+    if (!Array.isArray(raw)) return [];
+    return raw.map((entry: Record<string, unknown>) => parseUserProfile(entry));
+  } catch {
     return [];
   }
-
-  if (!result.result?.retval) return [];
-
-  const raw = scValToNative(result.result.retval);
-  if (!Array.isArray(raw)) return [];
-
-  return raw.map((entry: Record<string, unknown>) => parseUserProfile(entry));
 }
 
 /**
  * Mint a bot of a specific tier.
  */
 export async function mintTierBot(address: string, tier: string, token: string): Promise<string> {
-  const server = getServer();
-  const contract = new Contract(BOT_NFT_CONTRACT_ID);
-
-  const txBuilder = new TransactionBuilder(
-    await server.getAccount(address), { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
-  )
-    .addOperation(
-      contract.call(
-        "mint_tier",
-        nativeToScVal(address, { type: "address" }),
-        nativeToScVal(tier, { type: "symbol" }),
-        nativeToScVal(token, { type: "address" })
-      )
-    )
-    .setTimeout(30)
-    .build();
-
-  return txBuilder.toXDR();
+  return buildTxXdr(
+    BOT_NFT_CONTRACT_ID,
+    "mint",
+    [
+      nativeToScVal(address, { type: "address" }),
+      nativeToScVal(tier, { type: "symbol" }),
+      nativeToScVal(token, { type: "string" }),
+    ],
+    address
+  );
 }
 
 /**
@@ -211,63 +200,54 @@ export async function cancelListing(
   userAddress: string,
   listingId: bigint
 ): Promise<string> {
-  const server = getServer();
-  const contract = new Contract(MARKETPLACE_CONTRACT_ID);
+  return buildTxXdr(
+    MARKETPLACE_CONTRACT_ID,
+    "cancel_listing",
+    [nativeToScVal(listingId, { type: "u128" })],
+    userAddress
+  );
+}
 
-  const txBuilder = new TransactionBuilder(
-    await server.getAccount(userAddress),
-    { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
-  )
-    .addOperation(
-      contract.call(
-        "cancel_listing",
-        nativeToScVal(listingId, { type: "u128" })
-      )
-    )
-    .setTimeout(30)
-    .build();
-
-  return txBuilder.toXDR();
+export function parseListing(listing: Record<string, unknown>): MarketplaceListing {
+  return {
+    id: toBigInt(listing.id),
+    seller: String(listing.seller ?? ""),
+    bot_id: toBigInt(listing.bot_id),
+    price: toBigInt(listing.price),
+    listed_at: toBigInt(listing.listed_at),
+  };
 }
 
 /**
  * Get all active marketplace listings.
  * Returns array of listing objects.
  */
-export async function getActiveListings(): Promise<MarketplaceListing[]> {
-  const server = getServer();
-  const contract = new Contract(MARKETPLACE_CONTRACT_ID);
-
-  const result = await server.simulateTransaction(
-    new TransactionBuilder(
-      await server.getAccount((window as any).selectedPublicKey), { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
-    )
-      .addOperation(contract.call("get_active_listings"))
-      .setTimeout(30)
-      .build()
-  );
-
-  if (SorobanRpc.Api.isSimulationError(result)) {
+export async function getActiveListings(
+  start: number = 0,
+  limit: number = 100,
+  sourceAddress?: string
+): Promise<MarketplaceListing[]> {
+  try {
+    const listingsRaw = await simulateContractCall(
+      MARKETPLACE_CONTRACT_ID,
+      "get_active_listings",
+      [
+        nativeToScVal(start, { type: "u64" }),
+        nativeToScVal(limit, { type: "u32" }),
+      ],
+      defaultSource(sourceAddress)
+    );
+    if (!Array.isArray(listingsRaw)) return [];
+    return listingsRaw.map((listing: Record<string, unknown>) => ({
+      id: toBigInt(listing.id),
+      seller: String(listing.seller ?? ""),
+      bot_id: toBigInt(listing.bot_id),
+      price: toBigInt(listing.price),
+      listed_at: toBigInt(listing.listed_at),
+    }));
+  } catch {
     return [];
   }
-
-  if (!result.result?.retval) {
-    return [];
-  }
-
-  const listingsRaw = scValToNative(result.result.retval);
-
-  if (!Array.isArray(listingsRaw)) {
-    return [];
-  }
-
-  return listingsRaw.map((listing: Record<string, unknown>) => ({
-    id: toBigInt(listing.id),
-    seller: String(listing.seller ?? ""),
-    bot_id: toBigInt(listing.bot_id),
-    price: toBigInt(listing.price),
-    listed_at: toBigInt(listing.listed_at),
-  }));
 }
 
 /**
@@ -277,138 +257,126 @@ export async function getActiveListings(): Promise<MarketplaceListing[]> {
 export async function getUserListings(
   userAddress: string
 ): Promise<MarketplaceListing[]> {
-  const server = getServer();
-  const contract = new Contract(MARKETPLACE_CONTRACT_ID);
-
-  const result = await server.simulateTransaction(
-    new TransactionBuilder(
-      await server.getAccount(userAddress), { fee: "100", networkPassphrase: "Test SDF Network ; September 2015" }
-    )
-      .addOperation(
-        contract.call("get_user_listings", nativeToScVal(userAddress, { type: "address" }))
-      )
-      .setTimeout(30)
-      .build()
-  );
-
-  if (SorobanRpc.Api.isSimulationError(result)) {
+  try {
+    const listingsRaw = await simulateContractCall(
+      MARKETPLACE_CONTRACT_ID,
+      "get_user_listings",
+      [nativeToScVal(userAddress, { type: "address" })],
+      userAddress
+    );
+    if (!Array.isArray(listingsRaw)) return [];
+    return listingsRaw.map((listing: Record<string, unknown>) => ({
+      id: toBigInt(listing.id),
+      seller: String(listing.seller ?? ""),
+      bot_id: toBigInt(listing.bot_id),
+      price: toBigInt(listing.price),
+      listed_at: toBigInt(listing.listed_at),
+    }));
+  } catch {
     return [];
   }
+}
 
-  if (!result.result?.retval) {
-    return [];
+/**
+ * Check whether an address is registered in the registry contract.
+ * Read-only simulation of the registry's `is_registered` method.
+ */
+export async function isRegistered(userAddress: string): Promise<boolean> {
+  try {
+    const result = await simulateContractCall(
+      REGISTRY_CONTRACT_ID,
+      "is_registered",
+      [nativeToScVal(userAddress, { type: "address" })],
+      userAddress
+    );
+    return Boolean(result);
+  } catch {
+    return false;
   }
+}
 
-  const listingsRaw = scValToNative(result.result.retval);
-
-  if (!Array.isArray(listingsRaw)) {
-    return [];
+/**
+ * Get the total number of registered users from the registry contract.
+ * Read-only simulation of the registry's `total_users` method.
+ */
+export async function getTotalUsers(sourceAddress?: string): Promise<number> {
+  try {
+    const result = await simulateContractCall(
+      REGISTRY_CONTRACT_ID,
+      "total_users",
+      [],
+      defaultSource(sourceAddress)
+    );
+    return Number(result ?? 0);
+  } catch {
+    return 0;
   }
-
-  return listingsRaw.map((listing: Record<string, unknown>) => ({
-    id: toBigInt(listing.id),
-    seller: String(listing.seller ?? ""),
-    bot_id: toBigInt(listing.bot_id),
-    price: toBigInt(listing.price),
-    listed_at: toBigInt(listing.listed_at),
-  }));
 }
 
 /**
  * Register a user in the registry contract.
+ * State-changing — returns an XDR for the wallet to sign.
  */
 export async function registerUser(userAddress: string, username: string): Promise<string> {
-  const server = getServer();
-  const contract = new Contract(REGISTRY_CONTRACT_ID);
-
-  const txBuilder = new TransactionBuilder(
-    await server.getAccount(userAddress),
-    { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
-  )
-    .addOperation(
-      contract.call("register", nativeToScVal(userAddress, { type: "address" }), nativeToScVal(username, { type: "string" }))
-    )
-    .setTimeout(30)
-    .build();
-
-  return txBuilder.toXDR();
+  return buildTxXdr(
+    REGISTRY_CONTRACT_ID,
+    "register",
+    [
+      nativeToScVal(userAddress, { type: "address" }),
+      nativeToScVal(username, { type: "string" }),
+    ],
+    userAddress
+  );
 }
 
 /**
  * Mint a basic bot from the bot_nft contract.
  */
 export async function mintBasicBot(userAddress: string): Promise<string> {
-  const server = getServer();
-  const contract = new Contract(BOT_NFT_CONTRACT_ID);
-
-  const txBuilder = new TransactionBuilder(
-    await server.getAccount(userAddress),
-    { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
-  )
-    .addOperation(
-      contract.call("mint_basic", nativeToScVal(userAddress, { type: "address" }))
-    )
-    .setTimeout(30)
-    .build();
-
-  return txBuilder.toXDR();
+  return buildTxXdr(
+    BOT_NFT_CONTRACT_ID,
+    "mint_basic",
+    [nativeToScVal(userAddress, { type: "address" })],
+    userAddress
+  );
 }
 
 /**
  * Start accrual for a user in the accrual contract.
  */
 export async function startAccrual(userAddress: string, rate: number): Promise<string> {
-  const server = getServer();
-  const contract = new Contract(ACCRUAL_CONTRACT_ID);
-
-  const txBuilder = new TransactionBuilder(
-    await server.getAccount(userAddress),
-    { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
-  )
-    .addOperation(
-      contract.call("start_accrual", nativeToScVal(userAddress, { type: "address" }), nativeToScVal(rate, { type: "u32" }))
-    )
-    .setTimeout(30)
-    .build();
-
-  return txBuilder.toXDR();
+  return buildTxXdr(
+    ACCRUAL_CONTRACT_ID,
+    "start_accrual",
+    [
+      nativeToScVal(userAddress, { type: "address" }),
+      nativeToScVal(rate, { type: "u32" }),
+    ],
+    userAddress
+  );
 }
 
 /**
  * Get accrual state for a user from the accrual contract.
  */
 export async function getAccrualState(userAddress: string): Promise<AccrualState | null> {
-  const server = getServer();
-  const contract = new Contract(ACCRUAL_CONTRACT_ID);
+  try {
+    const stateRaw = (await simulateContractCall(
+      ACCRUAL_CONTRACT_ID,
+      "get_accrual_state",
+      [nativeToScVal(userAddress, { type: "address" })],
+      userAddress
+    )) as Record<string, unknown> | null;
 
-  const result = await server.simulateTransaction(
-    new TransactionBuilder(
-      await server.getAccount(userAddress),
-      { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
-    )
-      .addOperation(contract.call("get_accrual_state", nativeToScVal(userAddress, { type: "address" })))
-      .setTimeout(30)
-      .build()
-  );
+    if (!stateRaw) return null;
 
-  if (SorobanRpc.Api.isSimulationError(result)) {
+    return {
+      last_claim_ts: toBigInt(stateRaw.last_claim_ts),
+      total_claimed_points: toBigInt(stateRaw.total_claimed_points),
+    };
+  } catch {
     return null;
   }
-
-  if (!result.result?.retval) {
-    return null;
-  }
-
-  const stateRaw = scValToNative(result.result.retval);
-
-  if (!stateRaw) {
-    return null;
-  }
-
-  return {
-    last_claim_ts: BigInt(stateRaw.last_claim_ts ?? 0),
-    total_claimed_points: BigInt(stateRaw.total_claimed_points ?? 0),
-  };
 }
 
 /**
@@ -470,62 +438,19 @@ export async function claimPoints(userAddress: string): Promise<string> {
  * Get user profile from the registry contract.
  */
 export async function getUserProfile(userAddress: string): Promise<UserProfile | null> {
-  const server = getServer();
-  const contract = new Contract(REGISTRY_CONTRACT_ID);
+  try {
+    const profileRaw = (await simulateContractCall(
+      REGISTRY_CONTRACT_ID,
+      "get_user",
+      [nativeToScVal(userAddress, { type: "address" })],
+      userAddress
+    )) as Record<string, unknown> | null;
 
-  const result = await server.simulateTransaction(
-    new TransactionBuilder(
-      await server.getAccount(userAddress),
-      { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
-    )
-      .addOperation(contract.call("get_user", nativeToScVal(userAddress, { type: "address" })))
-      .setTimeout(30)
-      .build()
-  );
-
-  if (SorobanRpc.Api.isSimulationError(result)) {
+    if (!profileRaw) return null;
+    return parseUserProfile(profileRaw);
+  } catch {
     return null;
   }
-
-  if (!result.result?.retval) {
-    return null;
-  }
-
-  const profileRaw = scValToNative(result.result.retval);
-
-  if (!profileRaw) {
-    return null;
-  }
-
-  return parseUserProfile(profileRaw);
-}
-
-/**
- * Check whether a user is registered in the registry contract.
- */
-export async function isRegistered(userAddress: string): Promise<boolean> {
-  const server = getServer();
-  const contract = new Contract(REGISTRY_CONTRACT_ID);
-
-  const result = await server.simulateTransaction(
-    new TransactionBuilder(
-      await server.getAccount(userAddress),
-      { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
-    )
-      .addOperation(contract.call("is_registered", nativeToScVal(userAddress, { type: "address" })))
-      .setTimeout(30)
-      .build()
-  );
-
-  if (SorobanRpc.Api.isSimulationError(result)) {
-    return false;
-  }
-
-  if (!result.result?.retval) {
-    return false;
-  }
-
-  return Boolean(scValToNative(result.result.retval));
 }
 
 /**

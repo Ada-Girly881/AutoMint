@@ -172,9 +172,8 @@ impl BotNFTContract {
             Tier::Advanced => BotTier::Bronze,
             Tier::Premium => BotTier::Silver,
         };
-        let name = bot_tier.name(&env);
-
         // Create and store the bot
+        let name = bot_tier.name(&env);
         let bot = BotNFT {
             id: bot_id,
             owner: owner.clone(),
