@@ -11,13 +11,20 @@ function Skeleton({ className }: SkeletonProps) {
         "animate-pulse rounded-lg bg-card-2",
         className
       )}
+      aria-hidden="true"
     />
   );
 }
 
 function CardSkeleton() {
   return (
-    <div className="rounded-2xl border border-liner bg-card p-5 flex flex-col gap-4">
+    <div
+      className="rounded-2xl border border-liner bg-card p-5 flex flex-col gap-4"
+      role="status"
+      aria-busy="true"
+      aria-label="Loading card content"
+    >
+      <span className="sr-only">Loading...</span>
       <div className="flex items-center gap-3">
         <Skeleton className="h-11 w-11 rounded-xl" />
         <div className="flex flex-col gap-2">
@@ -36,7 +43,13 @@ function CardSkeleton() {
 
 function BotCardSkeleton() {
   return (
-    <div className="rounded-2xl border border-liner bg-card p-5 flex flex-col gap-4">
+    <div
+      className="rounded-2xl border border-liner bg-card p-5 flex flex-col gap-4"
+      role="status"
+      aria-busy="true"
+      aria-label="Loading bot card content"
+    >
+      <span className="sr-only">Loading...</span>
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <Skeleton className="h-11 w-11 rounded-xl" />
