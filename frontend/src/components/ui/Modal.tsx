@@ -92,7 +92,7 @@ export default function Modal({ isOpen, onClose, title, description, children }:
             ref={contentRef}
             role="dialog"
             aria-modal="true"
-            aria-label={title || "Dialog"}
+            aria-label={title ? undefined : "Dialog"}
             aria-labelledby={title ? "modal-title" : undefined}
             aria-describedby={descId}
             initial={{ opacity: 0, scale: 0.95, y: 8 }}
