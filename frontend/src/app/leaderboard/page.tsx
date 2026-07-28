@@ -1,9 +1,12 @@
 "use client";
 
-import { Trophy, Loader2 } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { toast } from "sonner";
+import { Trophy, RotateCw } from "lucide-react";
 import { useLeaderboard } from "@/hooks/useLeaderboard";
 import { useWalletStore } from "@/store/walletStore";
 import { LeaderboardTable } from "@/components/leaderboard/LeaderboardTable";
+import { Skeleton } from "@/components/ui/Skeleton";
 import type { UserProfile } from "@/types";
 
 function mapToTableUsers(
@@ -20,8 +23,20 @@ function mapToTableUsers(
 }
 
 export default function LeaderboardPage() {
-  const { data: leaderboardData, isLoading, isError } = useLeaderboard();
+  const { data: leaderboardData, isLoading, isError, refetch, isRefetching } = useLeaderboard();
   const publicKey = useWalletStore((s) => s.publicKey);
+
+  // #202 — surface load failures the same way the rest of the app does
+  // (sonner toast), in addition to the existing inline error panel.
+  const hasToastedError = useRef(false);
+  useEffect(() => {
+    if (isError && !hasToastedError.current) {
+      hasToastedError.current = true;
+      toast.error("Failed to load leaderboard. Please try again later.");
+    } else if (!isError) {
+      hasToastedError.current = false;
+    }
+  }, [isError]);
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-10">
@@ -38,14 +53,30 @@ export default function LeaderboardPage() {
         </div>
       </div>
 
-      {/* Loading state */}
+      {/* Loading state — skeleton rows matching the real table shape, per
+          the app-wide loading convention (Skeleton component), instead of
+          a generic spinner. */}
       {isLoading && (
         <div
-          className="flex flex-col items-center justify-center gap-3 py-20 text-muted"
+          className="overflow-hidden rounded-2xl border border-liner"
           data-testid="leaderboard-loading"
+          aria-busy="true"
+          aria-live="polite"
         >
-          <Loader2 className="h-8 w-8 animate-spin text-gold" />
-          <p className="text-sm">Loading leaderboard…</p>
+          <div className="flex border-b border-liner px-4 py-3">
+            <Skeleton className="h-3 w-10" />
+          </div>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-4 border-b border-liner px-4 py-3 last:border-b-0"
+            >
+              <Skeleton className="h-5 w-6 rounded" />
+              <Skeleton className="h-4 flex-1 max-w-[10rem]" />
+              <Skeleton className="ml-auto h-4 w-14" />
+              <Skeleton className="hidden h-3 w-20 sm:block" />
+            </div>
+          ))}
         </div>
       )}
 
@@ -58,6 +89,14 @@ export default function LeaderboardPage() {
           <p className="text-sm">
             Failed to load leaderboard. Please try again later.
           </p>
+          <button
+            onClick={() => refetch()}
+            disabled={isRefetching}
+            className="mt-4 inline-flex items-center gap-2 rounded-xl border border-liner px-4 py-2 text-sm font-semibold text-text hover:border-gold/50 hover:text-gold transition-colors disabled:opacity-50"
+          >
+            <RotateCw className={isRefetching ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+            {isRefetching ? "Retrying…" : "Retry"}
+          </button>
         </div>
       )}
 

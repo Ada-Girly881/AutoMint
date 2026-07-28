@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useId } from "react";
+import { toast } from "sonner";
 import Modal from "@/components/ui/Modal";
 import { useListBot } from "@/hooks/useMarketplace";
 import { xlmToStroops, stroopsToXlm } from "@/types";
@@ -18,6 +19,7 @@ interface ListBotModalProps {
 export default function ListBotModal({ bot, isOpen, onClose }: ListBotModalProps) {
   const [priceXlm, setPriceXlm] = useState("");
   const listBot = useListBot();
+  const priceInputId = useId();
 
   const priceNum = useMemo(() => {
     const n = parseFloat(priceXlm);
@@ -34,8 +36,16 @@ export default function ListBotModal({ bot, isOpen, onClose }: ListBotModalProps
       { botId: bot.id, price: priceStroops },
       {
         onSuccess: () => {
+          toast.success(`${bot.name} listed for ${priceNum} XLM`);
           onClose();
           setPriceXlm("");
+        },
+        // #199 — previously silent: a failed listing gave the user no
+        // feedback at all beyond the button reverting to its idle label.
+        onError: (err) => {
+          toast.error(
+            err instanceof Error ? err.message : "Failed to list bot for sale. Please try again.",
+          );
         },
       },
     );
@@ -45,22 +55,30 @@ export default function ListBotModal({ bot, isOpen, onClose }: ListBotModalProps
     <Modal isOpen={isOpen} onClose={onClose} title={`List ${bot.name} for Sale`}>
       <div className="flex flex-col gap-5">
         {/* Price input */}
-        <label className="flex flex-col gap-1.5">
+        <label htmlFor={priceInputId} className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-muted">Price (XLM)</span>
           <input
+            id={priceInputId}
             type="number"
+            inputMode="decimal"
             min="0"
             step="0.01"
             placeholder="0.00"
             value={priceXlm}
             onChange={(e) => setPriceXlm(e.target.value)}
+            aria-describedby={priceNum > 0 ? `${priceInputId}-fee` : undefined}
             className="rounded-xl border border-liner bg-card-2 px-4 py-3 text-lg text-text placeholder:text-muted/50 focus:border-gold/50 focus:outline-none focus:ring-1 focus:ring-gold/30"
           />
         </label>
 
         {/* Live fee breakdown */}
         {priceNum > 0 && (
-          <div className="rounded-xl border border-liner bg-card p-4 text-sm">
+          <div
+            id={`${priceInputId}-fee`}
+            role="status"
+            aria-live="polite"
+            className="rounded-xl border border-liner bg-card p-4 text-sm"
+          >
             <div className="flex items-center justify-between text-muted">
               <span>Marketplace fee ({FEE_PERCENT}%)</span>
               <span>-{fee.toFixed(4)} XLM</span>
@@ -76,6 +94,7 @@ export default function ListBotModal({ bot, isOpen, onClose }: ListBotModalProps
         <button
           onClick={handleSubmit}
           disabled={priceNum <= 0 || listBot.isPending}
+          aria-busy={listBot.isPending}
           className="btn-primary w-full py-3 text-base"
         >
           {listBot.isPending ? "Listing…" : "List for Sale"}
