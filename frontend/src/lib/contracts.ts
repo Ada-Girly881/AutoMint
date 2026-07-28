@@ -1,5 +1,6 @@
 import {
   Contract,
+  SorobanRpc,
   TransactionBuilder,
   scValToNative,
   nativeToScVal,
@@ -247,8 +248,6 @@ export async function getActiveListings(
   } catch {
     return [];
   }
-
-  return listingsRaw.map((listing: Record<string, unknown>) => parseListing(listing));
 }
 
 /**
@@ -312,8 +311,6 @@ export async function getTotalUsers(sourceAddress?: string): Promise<number> {
   } catch {
     return 0;
   }
-
-  return listingsRaw.map((listing: Record<string, unknown>) => parseListing(listing));
 }
 
 /**
@@ -454,34 +451,6 @@ export async function getUserProfile(userAddress: string): Promise<UserProfile |
   } catch {
     return null;
   }
-}
-
-/**
- * Check whether a user is registered in the registry contract.
- */
-export async function isRegistered(userAddress: string): Promise<boolean> {
-  const server = getServer();
-  const contract = new Contract(REGISTRY_CONTRACT_ID);
-
-  const result = await server.simulateTransaction(
-    new TransactionBuilder(
-      await server.getAccount(userAddress),
-      { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
-    )
-      .addOperation(contract.call("is_registered", nativeToScVal(userAddress, { type: "address" })))
-      .setTimeout(30)
-      .build()
-  );
-
-  if (SorobanRpc.Api.isSimulationError(result)) {
-    return false;
-  }
-
-  if (!result.result?.retval) {
-    return false;
-  }
-
-  return Boolean(scValToNative(result.result.retval));
 }
 
 /**
