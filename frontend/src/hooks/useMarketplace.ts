@@ -6,12 +6,12 @@ import type { Tier } from "@/types";
 
 export function useBuyBot() {
   const queryClient = useQueryClient();
-  const address = useWalletStore((s) => s.address);
+  const publicKey = useWalletStore((s) => s.publicKey);
 
   return useMutation({
     mutationFn: async (listingId: number) => {
-      if (!address) throw new Error("Wallet not connected");
-      return buyBotTx(address, listingId);
+      if (!publicKey) throw new Error("Wallet not connected");
+      return buyBotTx(publicKey, listingId);
     },
     onSuccess: () => {
       toast.success("Bot purchased successfully!");
@@ -27,12 +27,12 @@ export function useBuyBot() {
 
 export function useMintTierBot() {
   const queryClient = useQueryClient();
-  const address = useWalletStore((s) => s.address);
+  const publicKey = useWalletStore((s) => s.publicKey);
 
   return useMutation({
     mutationFn: async ({ tier, token }: { tier: Tier; token: string }) => {
-      if (!address) throw new Error("Wallet not connected");
-      return mintTierBotTx(address, tier, token);
+      if (!publicKey) throw new Error("Wallet not connected");
+      return mintTierBotTx(publicKey, tier, token);
     },
     onSuccess: () => {
       toast.success("Tier bot minted successfully!");
@@ -48,19 +48,19 @@ export function useMintTierBot() {
 export function useListings() {
   return useQuery({
     queryKey: ["listings"],
-    queryFn: getActiveListings,
+    queryFn: () => getActiveListings(),
     refetchInterval: 30000, // Poll every 30 seconds
     staleTime: 15000,
   });
 }
 
 export function useMyListings() {
-  const address = useWalletStore((s) => s.address);
+  const publicKey = useWalletStore((s) => s.publicKey);
 
   return useQuery({
-    queryKey: ["myListings", address],
-    queryFn: () => (address ? getUserListings(address) : Promise.resolve([])),
-    enabled: !!address,
+    queryKey: ["myListings", publicKey],
+    queryFn: () => (publicKey ? getUserListings(publicKey) : Promise.resolve([])),
+    enabled: !!publicKey,
     refetchInterval: 30000, // Poll every 30 seconds
     staleTime: 15000,
   });
@@ -68,12 +68,12 @@ export function useMyListings() {
 
 export function useListBot() {
   const queryClient = useQueryClient();
-  const address = useWalletStore((s) => s.address);
+  const publicKey = useWalletStore((s) => s.publicKey);
 
   return useMutation({
     mutationFn: async ({ botId, price }: { botId: bigint; price: bigint }) => {
-      if (!address) throw new Error("Wallet not connected");
-      return listBot(address, botId, price);
+      if (!publicKey) throw new Error("Wallet not connected");
+      return listBot(publicKey, botId, price);
     },
     onSuccess: () => {
       toast.success("Bot listed successfully!");
@@ -89,12 +89,12 @@ export function useListBot() {
 
 export function useCancelListing() {
   const queryClient = useQueryClient();
-  const address = useWalletStore((s) => s.address);
+  const publicKey = useWalletStore((s) => s.publicKey);
 
   return useMutation({
     mutationFn: async (listingId: bigint) => {
-      if (!address) throw new Error("Wallet not connected");
-      return cancelListing(address, listingId);
+      if (!publicKey) throw new Error("Wallet not connected");
+      return cancelListing(publicKey, listingId);
     },
     onSuccess: () => {
       toast.success("Listing cancelled successfully!");

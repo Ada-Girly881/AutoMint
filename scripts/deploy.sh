@@ -80,7 +80,7 @@ stellar contract invoke \
   --id "$MARKETPLACE_ID" \
   --source "$IDENTITY" \
   --network "$NETWORK" \
-  -- initialize --admin "$ADMIN_ADDRESS"
+  -- initialize --admin "$ADMIN_ADDRESS" --bot-nft "$BOT_NFT_ID" --fee-bps 250
 
 echo "Initializing Token..."
 stellar contract invoke \

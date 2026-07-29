@@ -62,3 +62,36 @@ export interface AccrualState {
   last_claim_ts: bigint;
   total_claimed_points: bigint;
 }
+
+export interface TierMeta {
+  color: string;
+  rate: number;
+  price: number;
+  emoji: string;
+}
+
+export const TIER_META: Record<BotTier, TierMeta> = {
+  Basic: { color: "text-tier-basic", rate: 1, price: 0, emoji: "🤖" },
+  Bronze: { color: "text-tier-bronze", rate: 2, price: 5, emoji: "🥉" },
+  Silver: { color: "text-tier-silver", rate: 5, price: 15, emoji: "🥈" },
+  Gold: { color: "text-tier-gold", rate: 10, price: 40, emoji: "🥇" },
+  Diamond: { color: "text-tier-diamond", rate: 25, price: 100, emoji: "💎" },
+};
+
+const TIER_ORDER: BotTier[] = ["Basic", "Bronze", "Silver", "Gold", "Diamond"];
+
+export function tierFromIndex(index: number): BotTier {
+  return TIER_ORDER[Math.min(index, TIER_ORDER.length - 1)] ?? "Basic";
+}
+
+export function formatPoints(points: bigint): string {
+  return Number(points).toLocaleString("en-US");
+}
+
+export function xlmToStroops(xlm: number): bigint {
+  return BigInt(Math.round(xlm * 1_000_000));
+}
+
+export function stroopsToXlm(stroops: bigint): number {
+  return Number(stroops) / 1_000_000;
+}
