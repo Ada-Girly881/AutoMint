@@ -26,10 +26,10 @@ function truncateAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-const RANK_ICON: Record<number, { icon: string; color: string }> = {
-  1: { icon: "🥇", color: "text-gold" },
-  2: { icon: "🥈", color: "text-tier-silver" },
-  3: { icon: "🥉", color: "text-tier-bronze" },
+const RANK_ICON: Record<number, { icon: string; color: string; label: string }> = {
+  1: { icon: "🥇", color: "text-gold", label: "1st place" },
+  2: { icon: "🥈", color: "text-tier-silver", label: "2nd place" },
+  3: { icon: "🥉", color: "text-tier-bronze", label: "3rd place" },
 };
 
 export function LeaderboardTable({ users, currentAddress }: LeaderboardTableProps) {
@@ -44,14 +44,29 @@ export function LeaderboardTable({ users, currentAddress }: LeaderboardTableProp
   const normalizedCurrentAddress = currentAddress?.toLowerCase() ?? null;
 
   return (
-    <div className="overflow-x-auto" data-testid="leaderboard-table">
+    <div
+      className="overflow-x-auto rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+      data-testid="leaderboard-table"
+      role="region"
+      aria-label="Leaderboard rankings, scrollable"
+      tabIndex={0}
+    >
       <table className="w-full text-left text-sm">
+        <caption className="sr-only">Leaderboard rankings</caption>
         <thead>
           <tr className="border-b border-liner text-muted text-xs uppercase tracking-wider">
-            <th className="px-4 py-3">Rank</th>
-            <th className="px-4 py-3">User</th>
-            <th className="px-4 py-3 text-right">Points</th>
-            <th className="px-4 py-3 hidden sm:table-cell">Address</th>
+            <th scope="col" className="px-2 py-3 sm:px-4">
+              Rank
+            </th>
+            <th scope="col" className="px-2 py-3 sm:px-4">
+              User
+            </th>
+            <th scope="col" className="px-2 py-3 text-right sm:px-4">
+              Points
+            </th>
+            <th scope="col" className="px-2 py-3 sm:px-4">
+              Address
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -68,6 +83,7 @@ export function LeaderboardTable({ users, currentAddress }: LeaderboardTableProp
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.25, delay: idx * 0.04 }}
                 data-testid={`user-row-${user.rank}`}
+                aria-current={isCurrentUser ? "true" : undefined}
                 className={clsx(
                   "border-b border-liner transition-colors",
                   isCurrentUser
@@ -76,18 +92,22 @@ export function LeaderboardTable({ users, currentAddress }: LeaderboardTableProp
                 )}
               >
                 {/* Rank */}
-                <td className="px-4 py-3 font-bold">
+                <td className="px-2 py-3 font-bold sm:px-4">
                   {rankMeta ? (
                     <span className={clsx("text-base", rankMeta.color)}>
-                      {rankMeta.icon}
+                      <span aria-hidden="true">{rankMeta.icon}</span>
+                      <span className="sr-only">{rankMeta.label}</span>
                     </span>
                   ) : (
-                    <span className="text-muted">#{user.rank}</span>
+                    <span className="text-muted">
+                      <span aria-hidden="true">#{user.rank}</span>
+                      <span className="sr-only">Rank {user.rank}</span>
+                    </span>
                   )}
                 </td>
 
                 {/* Username / display name */}
-                <td className="px-4 py-3">
+                <td className="px-2 py-3 sm:px-4">
                   <div className="flex items-center gap-2">
                     <span
                       className={clsx(
@@ -106,12 +126,12 @@ export function LeaderboardTable({ users, currentAddress }: LeaderboardTableProp
                 </td>
 
                 {/* Points */}
-                <td className="px-4 py-3 text-right font-semibold text-text">
+                <td className="px-2 py-3 text-right font-semibold text-text sm:px-4">
                   {user.points.toLocaleString()}
                 </td>
 
-                {/* Truncated address (hidden on mobile) */}
-                <td className="px-4 py-3 font-mono text-xs text-muted hidden sm:table-cell">
+                {/* Truncated address */}
+                <td className="px-2 py-3 font-mono text-xs text-muted sm:px-4">
                   {truncateAddress(user.address)}
                 </td>
               </motion.tr>
