@@ -9,8 +9,10 @@
 // ── @stellar/stellar-sdk mock ───────────────────────────────────────────────
 const mockGetAccount = jest.fn();
 const mockSimulateTransaction = jest.fn();
+const mockPrepareTransaction = jest.fn();
 const mockIsSimulationError = jest.fn();
 const mockScValToNative = jest.fn();
+const mockBuiltTx = { tx: true, toXDR: jest.fn(() => "UNPREPARED_XDR") };
 
 jest.mock("@stellar/stellar-sdk", () => ({
   __esModule: true,
@@ -18,6 +20,7 @@ jest.mock("@stellar/stellar-sdk", () => ({
     Server: jest.fn().mockImplementation(() => ({
       getAccount: mockGetAccount,
       simulateTransaction: mockSimulateTransaction,
+      prepareTransaction: mockPrepareTransaction,
     })),
     Api: {
       isSimulationError: (...args: unknown[]) => mockIsSimulationError(...args),
@@ -29,7 +32,7 @@ jest.mock("@stellar/stellar-sdk", () => ({
   TransactionBuilder: jest.fn().mockImplementation(() => ({
     addOperation: jest.fn().mockReturnThis(),
     setTimeout: jest.fn().mockReturnThis(),
-    build: jest.fn(() => ({ tx: true })),
+    build: jest.fn(() => mockBuiltTx),
   })),
   scValToNative: (...args: unknown[]) => mockScValToNative(...args),
   nativeToScVal: jest.fn(() => ({ scv: true })),
@@ -49,7 +52,7 @@ import {
   requestAccess,
   getNetwork,
 } from "@stellar/freighter-api";
-import { connectFreighter, simulateContractCall } from "../stellar";
+import { connectFreighter, simulateContractCall, buildPreparedTx } from "../stellar";
 
 const mockIsConnected = isConnected as jest.Mock;
 const mockRequestAccess = requestAccess as jest.Mock;
@@ -129,5 +132,35 @@ describe("simulateContractCall", () => {
     await expect(
       simulateContractCall("CCONTRACT", "balance", [], "GSRC")
     ).rejects.toThrow(/No return value/i);
+  });
+});
+
+describe("buildPreparedTx", () => {
+  beforeEach(() => {
+    mockGetAccount.mockResolvedValue({ accountId: () => "GSRC" });
+  });
+
+  it("returns the prepared transaction's XDR, not the unprepared build", async () => {
+    const preparedTx = { toXDR: jest.fn(() => "PREPARED_XDR_WITH_RESOURCE_FEE") };
+    mockPrepareTransaction.mockResolvedValue(preparedTx);
+
+    const xdr = await buildPreparedTx("CCONTRACT", "register", [], "GSRC");
+
+    // The built (unprepared) tx must be handed to prepareTransaction so the
+    // Soroban resource fee and footprint get attached — the XDR returned
+    // must be the *prepared* result, not the raw build() output.
+    expect(mockPrepareTransaction).toHaveBeenCalledWith(mockBuiltTx);
+    expect(xdr).toBe("PREPARED_XDR_WITH_RESOURCE_FEE");
+    expect(mockBuiltTx.toXDR).not.toHaveBeenCalled();
+  });
+
+  it("propagates a simulation failure from prepareTransaction", async () => {
+    mockPrepareTransaction.mockRejectedValue(
+      new Error("Simulation failed: insufficient resource fee")
+    );
+
+    await expect(
+      buildPreparedTx("CCONTRACT", "register", [], "GSRC")
+    ).rejects.toThrow(/insufficient resource fee/i);
   });
 });

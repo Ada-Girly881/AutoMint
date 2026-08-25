@@ -10,7 +10,7 @@ import {
   requestAccess as freighterRequestAccess,
   getNetwork as freighterGetNetwork,
 } from "@stellar/freighter-api";
-import { SOROBAN_RPC_URL, STELLAR_NETWORK_PASSPHRASE } from "./constants";
+import { BASE_FEE, SOROBAN_RPC_URL, STELLAR_NETWORK_PASSPHRASE } from "./constants";
 
 /**
  * Module-level singleton — created once, reused on every subsequent call.
@@ -147,7 +147,7 @@ export async function simulateContractCall(
   const account = await server.getAccount(sourceAddress);
 
   const tx = new TransactionBuilder(account, {
-    fee: "100",
+    fee: BASE_FEE,
     networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
   })
     .addOperation(contract.call(method, ...args))
@@ -165,4 +165,41 @@ export async function simulateContractCall(
   }
 
   return scValToNative(result.result.retval);
+}
+
+/**
+ * Build a state-changing transaction that invokes `method(...args)` on
+ * `contractId` and returns its base64 XDR, ready for the wallet to sign.
+ *
+ * Unlike a bare `TransactionBuilder` fee, `BASE_FEE` alone only covers the
+ * classic-operation inclusion fee. Every Soroban invocation also carries a
+ * resource fee (CPU instructions, ledger read/write bytes/entries) that
+ * varies per contract and per call. `server.prepareTransaction` simulates
+ * the call and pads the tx fee with that simulated resource cost — skipped,
+ * the resource fee is 0 and the ledger footprint is empty, so the tx is
+ * rejected on submission regardless of how high BASE_FEE is set. This
+ * applies to every write across all 5 contracts (registry, bot_nft, accrual,
+ * marketplace, token), including each leg of the register → mint_basic →
+ * start_accrual flow.
+ */
+export async function buildPreparedTx(
+  contractId: string,
+  method: string,
+  args: xdr.ScVal[],
+  sourceAddress: string
+): Promise<string> {
+  const server = getServer();
+  const contract = new Contract(contractId);
+  const account = await server.getAccount(sourceAddress);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
+  })
+    .addOperation(contract.call(method, ...args))
+    .setTimeout(30)
+    .build();
+
+  const prepared = await server.prepareTransaction(tx);
+  return prepared.toXDR();
 }
