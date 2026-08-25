@@ -49,8 +49,9 @@ export function useListings() {
   return useQuery({
     queryKey: ["listings"],
     queryFn: () => getActiveListings(),
-    refetchInterval: 30000, // Poll every 30 seconds
-    staleTime: 15000,
+    refetchInterval: 30000,
+    staleTime: 15_000,
+    gcTime: 120_000,
   });
 }
 
@@ -61,8 +62,9 @@ export function useMyListings() {
     queryKey: ["myListings", publicKey],
     queryFn: () => (publicKey ? getUserListings(publicKey) : Promise.resolve([])),
     enabled: !!publicKey,
-    refetchInterval: 30000, // Poll every 30 seconds
-    staleTime: 15000,
+    refetchInterval: 30000,
+    staleTime: 15_000,
+    gcTime: 120_000,
   });
 }
 

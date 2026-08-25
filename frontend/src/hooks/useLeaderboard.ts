@@ -11,5 +11,6 @@ export function useLeaderboard(limit = DEFAULT_LEADERBOARD_LIMIT) {
     queryFn: () => getLeaderboard(limit),
     refetchInterval: LEADERBOARD_POLL_INTERVAL,
     staleTime: 15_000,
+    gcTime: 120_000,
   });
 }
