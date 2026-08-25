@@ -1,13 +1,20 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import { Trophy, RotateCw } from "lucide-react";
 import { useLeaderboard } from "@/hooks/useLeaderboard";
 import { useWalletStore } from "@/store/walletStore";
-import { LeaderboardTable } from "@/components/leaderboard/LeaderboardTable";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type { UserProfile } from "@/types";
+
+// Code-split the table (framer-motion row animations) out of the route's
+// initial bundle — it's only needed once data has loaded.
+const LeaderboardTable = dynamic(
+  () => import("@/components/leaderboard/LeaderboardTable").then((mod) => mod.LeaderboardTable),
+  { ssr: false }
+);
 
 function mapToTableUsers(
   users: UserProfile[],
