@@ -16,6 +16,7 @@ import {
   STELLAR_NETWORK_PASSPHRASE,
 } from "./constants";
 import { getServer, simulateContractCall, buildPreparedTx } from "./stellar";
+import { withRetry } from "./rpcRetry";
 import type { BotNFT, UserProfile, BotTier, MarketplaceListing, AccrualState } from "@/types";
 
 const toBigInt = (v: unknown): bigint =>
@@ -380,15 +381,15 @@ export async function getPendingPoints(userAddress: string): Promise<bigint> {
   const server = getServer();
   const contract = new Contract(ACCRUAL_CONTRACT_ID);
 
-  const result = await server.simulateTransaction(
-    new TransactionBuilder(
-      await server.getAccount(userAddress),
-      { fee: BASE_FEE, networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
-    )
-      .addOperation(contract.call("pending_points", nativeToScVal(userAddress, { type: "address" })))
-      .setTimeout(30)
-      .build()
-  );
+  const tx = new TransactionBuilder(
+    await server.getAccount(userAddress),
+    { fee: BASE_FEE, networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
+  )
+    .addOperation(contract.call("pending_points", nativeToScVal(userAddress, { type: "address" })))
+    .setTimeout(30)
+    .build();
+
+  const result = await withRetry(() => server.simulateTransaction(tx));
 
   if (SorobanRpc.Api.isSimulationError(result)) {
     return BigInt(0);
@@ -444,15 +445,15 @@ export async function getUserBots(userAddress: string): Promise<bigint[]> {
   const server = getServer();
   const contract = new Contract(BOT_NFT_CONTRACT_ID);
 
-  const result = await server.simulateTransaction(
-    new TransactionBuilder(
-      await server.getAccount(userAddress),
-      { fee: BASE_FEE, networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
-    )
-      .addOperation(contract.call("get_user_bots", nativeToScVal(userAddress, { type: "address" })))
-      .setTimeout(30)
-      .build()
-  );
+  const tx = new TransactionBuilder(
+    await server.getAccount(userAddress),
+    { fee: BASE_FEE, networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
+  )
+    .addOperation(contract.call("get_user_bots", nativeToScVal(userAddress, { type: "address" })))
+    .setTimeout(30)
+    .build();
+
+  const result = await withRetry(() => server.simulateTransaction(tx));
 
   if (SorobanRpc.Api.isSimulationError(result)) {
     return [];
@@ -478,15 +479,15 @@ export async function getBotById(
   const server = getServer();
   const contract = new Contract(BOT_NFT_CONTRACT_ID);
 
-  const result = await server.simulateTransaction(
-    new TransactionBuilder(
-      await server.getAccount(userAddress),
-      { fee: BASE_FEE, networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
-    )
-      .addOperation(contract.call("get_bot", nativeToScVal(botId, { type: "u64" })))
-      .setTimeout(30)
-      .build()
-  );
+  const tx = new TransactionBuilder(
+    await server.getAccount(userAddress),
+    { fee: BASE_FEE, networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
+  )
+    .addOperation(contract.call("get_bot", nativeToScVal(botId, { type: "u64" })))
+    .setTimeout(30)
+    .build();
+
+  const result = await withRetry(() => server.simulateTransaction(tx));
 
   if (SorobanRpc.Api.isSimulationError(result)) {
     return null;
@@ -510,15 +511,15 @@ export async function getUserTotalRate(userAddress: string): Promise<bigint> {
   const server = getServer();
   const contract = new Contract(BOT_NFT_CONTRACT_ID);
 
-  const result = await server.simulateTransaction(
-    new TransactionBuilder(
-      await server.getAccount(userAddress),
-      { fee: BASE_FEE, networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
-    )
-      .addOperation(contract.call("get_user_total_rate", nativeToScVal(userAddress, { type: "address" })))
-      .setTimeout(30)
-      .build()
-  );
+  const tx = new TransactionBuilder(
+    await server.getAccount(userAddress),
+    { fee: BASE_FEE, networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
+  )
+    .addOperation(contract.call("get_user_total_rate", nativeToScVal(userAddress, { type: "address" })))
+    .setTimeout(30)
+    .build();
+
+  const result = await withRetry(() => server.simulateTransaction(tx));
 
   if (SorobanRpc.Api.isSimulationError(result)) {
     return BigInt(0);
