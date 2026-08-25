@@ -103,6 +103,21 @@ export function parseBotNFT(rawData: Record<string, unknown>): BotNFT {
 }
 
 /**
+ * Parse a raw scVal map from the marketplace contract into a typed MarketplaceListing.
+ */
+export function parseListing(
+  rawData: Record<string, unknown>
+): MarketplaceListing {
+  return {
+    id: toBigInt(rawData.id),
+    seller: String(rawData.seller ?? ""),
+    bot_id: toBigInt(rawData.bot_id),
+    price: toBigInt(rawData.price),
+    listed_at: toBigInt(rawData.listed_at),
+  };
+}
+
+/**
  * Get the AMT token balance for a user.
  * Calls token contract's balance() function.
  */
@@ -202,16 +217,6 @@ export async function cancelListing(
   );
 }
 
-export function parseListing(listing: Record<string, unknown>): MarketplaceListing {
-  return {
-    id: toBigInt(listing.id),
-    seller: String(listing.seller ?? ""),
-    bot_id: toBigInt(listing.bot_id),
-    price: toBigInt(listing.price),
-    listed_at: toBigInt(listing.listed_at),
-  };
-}
-
 /**
  * Get all active marketplace listings.
  * Returns array of listing objects.
@@ -232,13 +237,7 @@ export async function getActiveListings(
       defaultSource(sourceAddress)
     );
     if (!Array.isArray(listingsRaw)) return [];
-    return listingsRaw.map((listing: Record<string, unknown>) => ({
-      id: toBigInt(listing.id),
-      seller: String(listing.seller ?? ""),
-      bot_id: toBigInt(listing.bot_id),
-      price: toBigInt(listing.price),
-      listed_at: toBigInt(listing.listed_at),
-    }));
+    return listingsRaw.map((listing: Record<string, unknown>) => parseListing(listing));
   } catch {
     return [];
   }
@@ -259,13 +258,7 @@ export async function getUserListings(
       userAddress
     );
     if (!Array.isArray(listingsRaw)) return [];
-    return listingsRaw.map((listing: Record<string, unknown>) => ({
-      id: toBigInt(listing.id),
-      seller: String(listing.seller ?? ""),
-      bot_id: toBigInt(listing.bot_id),
-      price: toBigInt(listing.price),
-      listed_at: toBigInt(listing.listed_at),
-    }));
+    return listingsRaw.map((listing: Record<string, unknown>) => parseListing(listing));
   } catch {
     return [];
   }
