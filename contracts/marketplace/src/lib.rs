@@ -369,6 +369,21 @@ impl MarketplaceContract {
             .checked_sub(fee)
             .ok_or(MarketplaceError::Overflow)?;
 
+        // Transfer bot NFT first (most critical asset). If this succeeds but
+        // payment fails, buyer has the bot. This is preferable to buyer sending
+        // payment but not receiving the bot (payment is reversible via governance,
+        // NFT transfer is not).
+        let marketplace = env.current_contract_address();
+        let bot_client = BotNFTContractClient::new(&env, &config.bot_nft);
+        if bot_client
+            .try_transfer(&listing.bot_id, &marketplace, &buyer)
+            .is_err()
+        {
+            return Err(MarketplaceError::BotTransferFailed);
+        }
+
+        // Now handle payment transfers. Fee transfer failure is swallowed to avoid
+        // aborting the entire purchase if only the admin fee fails.
         let token_client = token::Client::new(&env, &listing.currency);
         if token_client
             .try_transfer(&buyer, &listing.seller, &seller_payment)
@@ -378,15 +393,6 @@ impl MarketplaceContract {
         }
         if fee > 0 {
             let _ = token_client.try_transfer(&buyer, &config.admin, &fee);
-        }
-
-        let marketplace = env.current_contract_address();
-        let bot_client = BotNFTContractClient::new(&env, &config.bot_nft);
-        if bot_client
-            .try_transfer(&listing.bot_id, &marketplace, &buyer)
-            .is_err()
-        {
-            return Err(MarketplaceError::BotTransferFailed);
         }
 
         listing.active = false;
