@@ -79,6 +79,8 @@ export function useRegistered() {
     refetchInterval: POLL_INTERVAL,
     staleTime: 300_000,
     gcTime: 600_000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 }
 
@@ -94,6 +96,8 @@ export function useProfile() {
     refetchInterval: POLL_INTERVAL,
     staleTime: 30_000,
     gcTime: 300_000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 }
 
@@ -108,6 +112,8 @@ export function useBots() {
     refetchInterval: POLL_INTERVAL,
     staleTime: 30_000,
     gcTime: 300_000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 }
 
@@ -123,6 +129,8 @@ export function useAccrualState() {
     refetchInterval: POLL_INTERVAL,
     staleTime: 30_000,
     gcTime: 300_000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 }
 
@@ -138,6 +146,8 @@ export function useAmtBalance() {
     refetchInterval: POLL_INTERVAL,
     staleTime: 30_000,
     gcTime: 300_000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 }
 

@@ -12,5 +12,7 @@ export function useLeaderboard(limit = DEFAULT_LEADERBOARD_LIMIT) {
     refetchInterval: LEADERBOARD_POLL_INTERVAL,
     staleTime: 15_000,
     gcTime: 120_000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 }

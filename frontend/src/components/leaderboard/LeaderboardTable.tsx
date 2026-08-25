@@ -32,7 +32,7 @@ const RANK_ICON: Record<number, { icon: string; color: string }> = {
   3: { icon: "🥉", color: "text-tier-bronze" },
 };
 
-export function LeaderboardTable({ users, currentAddress }: LeaderboardTableProps) {
+function LeaderboardTableComponent({ users, currentAddress }: LeaderboardTableProps) {
   if (!users || users.length === 0) {
     return (
       <div data-testid="empty-leaderboard" className="text-muted text-sm text-center py-10">
@@ -122,3 +122,5 @@ export function LeaderboardTable({ users, currentAddress }: LeaderboardTableProp
     </div>
   );
 }
+
+export const LeaderboardTable = React.memo(LeaderboardTableComponent);

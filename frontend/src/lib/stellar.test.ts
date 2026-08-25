@@ -55,4 +55,64 @@ describe("ScVal helpers in stellar.ts", () => {
     expect(scValToNative(boolToScVal(true))).toBe(true);
     expect(scValToNative(boolToScVal(false))).toBe(false);
   });
+
+  describe("u64ToScVal edge cases", () => {
+    it("encodes zero correctly", () => {
+      const val = 0n;
+      const scVal = u64ToScVal(val);
+      const native = scValToNative(scVal);
+      expect(native).toBe(val);
+    });
+
+    it("encodes max safe integer for u64 correctly", () => {
+      const val = 18446744073709551615n; // 2^64 - 1
+      const scVal = u64ToScVal(val);
+      const native = scValToNative(scVal);
+      expect(native).toBe(val);
+    });
+
+    it("encodes very large bigint correctly", () => {
+      const val = 9223372036854775807n; // Max i64
+      const scVal = u64ToScVal(val);
+      const native = scValToNative(scVal);
+      expect(native).toBe(val);
+    });
+  });
+
+  describe("i128ToScVal edge cases", () => {
+    it("encodes zero correctly", () => {
+      const val = 0n;
+      const scVal = i128ToScVal(val);
+      const native = scValToNative(scVal);
+      expect(native).toBe(val);
+    });
+
+    it("encodes max safe integer for i128 correctly", () => {
+      const val = 170141183460469231731687303715884105727n; // 2^127 - 1
+      const scVal = i128ToScVal(val);
+      const native = scValToNative(scVal);
+      expect(native).toBe(val);
+    });
+
+    it("encodes min value for i128 correctly", () => {
+      const val = -170141183460469231731687303715884105728n; // -2^127
+      const scVal = i128ToScVal(val);
+      const native = scValToNative(scVal);
+      expect(native).toBe(val);
+    });
+
+    it("encodes very large negative bigint correctly", () => {
+      const val = -9223372036854775808n; // Min i64
+      const scVal = i128ToScVal(val);
+      const native = scValToNative(scVal);
+      expect(native).toBe(val);
+    });
+
+    it("encodes very large positive bigint correctly", () => {
+      const val = 9223372036854775807n; // Max i64
+      const scVal = i128ToScVal(val);
+      const native = scValToNative(scVal);
+      expect(native).toBe(val);
+    });
+  });
 });

@@ -4,6 +4,7 @@ import {
   TransactionBuilder,
   scValToNative,
   xdr,
+  nativeToScVal,
 } from "@stellar/stellar-sdk";
 import {
   isConnected as freighterIsConnected,
@@ -203,4 +204,28 @@ export async function buildPreparedTx(
 
   const prepared = await withRetry(() => server.prepareTransaction(tx));
   return prepared.toXDR();
+}
+
+export function addressToScVal(address: string): xdr.ScVal {
+  return nativeToScVal(address, { type: "address" });
+}
+
+export function u64ToScVal(value: bigint): xdr.ScVal {
+  return nativeToScVal(value, { type: "u64" });
+}
+
+export function u32ToScVal(value: number): xdr.ScVal {
+  return nativeToScVal(value, { type: "u32" });
+}
+
+export function i128ToScVal(value: bigint): xdr.ScVal {
+  return nativeToScVal(value, { type: "i128" });
+}
+
+export function stringToScVal(value: string): xdr.ScVal {
+  return nativeToScVal(value, { type: "string" });
+}
+
+export function boolToScVal(value: boolean): xdr.ScVal {
+  return nativeToScVal(value, { type: "bool" });
 }
