@@ -11,6 +11,8 @@ export function useBotDetails(botId: bigint) {
     queryFn: () => (publicKey ? getBotById(publicKey, botId) : Promise.resolve(null)),
     enabled: !!publicKey && botId > BigInt(0),
     refetchInterval: 30000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 }
 
@@ -28,5 +30,7 @@ export function useAllBotDetails(botIds: bigint[]) {
     },
     enabled: !!publicKey && botIds.length > 0,
     refetchInterval: 30000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 }

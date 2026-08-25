@@ -49,7 +49,7 @@ function useAnimatedNumber(target: number, duration = 0.8) {
   return displayed;
 }
 
-export function PointsCounter({ points, rate, bots, amtBalance }: PointsCounterProps) {
+function PointsCounterComponent({ points, rate, bots, amtBalance }: PointsCounterProps) {
   const animatedPoints = useAnimatedNumber(points);
 
   return (
@@ -156,3 +156,5 @@ export function PointsCounter({ points, rate, bots, amtBalance }: PointsCounterP
     </div>
   );
 }
+
+export const PointsCounter = React.memo(PointsCounterComponent);
