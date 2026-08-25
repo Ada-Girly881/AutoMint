@@ -573,4 +573,94 @@ mod test {
         let c2 = client.config();
         assert_eq!(c1.points_per_amt, c2.points_per_amt);
     }
+
+    #[test]
+    fn test_claim_updates_registry_total_points_and_claimed_amt() {
+        let (env, _admin, registry, token, accrual) = setup();
+        let user = Address::generate(&env);
+        let reg_client = automint_registry::RegistryContractClient::new(&env, &registry);
+
+        // Register user in registry
+        register_user(&env, &registry, &user, "claimtest");
+
+        // Start accrual: rate=3600 pts/hr → 1 point per second
+        accrual.start_accrual(&user, &3600_u64);
+
+        // Advance time by 3600 seconds → pending = 3600 points
+        // With points_per_amt=100: amt_to_mint = 3600/100 = 36, remaining = 0
+        env.ledger().with_mut(|l| {
+            l.timestamp += 3600;
+            l.sequence_number += 1;
+        });
+
+        let pending = accrual.claim(&user, &token, &registry);
+        assert_eq!(pending, 3600);
+
+        // Verify registry state updated via cross-contract calls
+        let profile = reg_client.get_user(&user);
+        assert_eq!(profile.total_points, 3600);
+        assert_eq!(profile.claimed_amt, 36);
+    }
+
+    #[test]
+    fn test_claim_below_threshold_updates_registry_points_only() {
+        let (env, _admin, registry, token, accrual) = setup();
+        let user = Address::generate(&env);
+        let reg_client = automint_registry::RegistryContractClient::new(&env, &registry);
+
+        register_user(&env, &registry, &user, "belowthresh");
+
+        // rate=3600 → 1 pt/sec, advance 50s → 50 points < 100 threshold
+        accrual.start_accrual(&user, &3600_u64);
+
+        env.ledger().with_mut(|l| {
+            l.timestamp += 50;
+            l.sequence_number += 1;
+        });
+
+        let pending = accrual.claim(&user, &token, &registry);
+        assert_eq!(pending, 50);
+
+        let profile = reg_client.get_user(&user);
+        // Points added to registry even when below mint threshold
+        assert_eq!(profile.total_points, 50);
+        // No tokens minted, so claimed_amt stays 0
+        assert_eq!(profile.claimed_amt, 0);
+    }
+
+    #[test]
+    fn test_claim_twice_accumulates_registry_state() {
+        let (env, _admin, registry, token, accrual) = setup();
+        let user = Address::generate(&env);
+        let reg_client = automint_registry::RegistryContractClient::new(&env, &registry);
+
+        register_user(&env, &registry, &user, "twice");
+
+        // rate=3600 → 1 pt/sec
+        accrual.start_accrual(&user, &3600_u64);
+
+        // First claim: 80 seconds → 80 points (below threshold, no mint)
+        env.ledger().with_mut(|l| {
+            l.timestamp += 80;
+            l.sequence_number += 1;
+        });
+        let pending1 = accrual.claim(&user, &token, &registry);
+        assert_eq!(pending1, 80);
+
+        // Second claim: 120 more seconds → 120 points
+        // Carry-forward from first claim: 80 % 100 = 80
+        // updated_points = 80 + 120 = 200 → amt_to_mint = 200/100 = 2, remaining = 0
+        env.ledger().with_mut(|l| {
+            l.timestamp += 120;
+            l.sequence_number += 1;
+        });
+        let pending2 = accrual.claim(&user, &token, &registry);
+        assert_eq!(pending2, 120);
+
+        let profile = reg_client.get_user(&user);
+        // total_points accumulates both claims: 80 + 120 = 200
+        assert_eq!(profile.total_points, 200);
+        // Only the second claim crosses the threshold: 200/100 = 2
+        assert_eq!(profile.claimed_amt, 2);
+    }
 }

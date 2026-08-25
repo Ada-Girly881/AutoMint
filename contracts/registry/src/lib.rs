@@ -164,6 +164,9 @@ impl RegistryContract {
     }
 
     pub fn add_points(env: Env, user: Address, points: u64) -> Result<(), RegistryError> {
+        // SECURITY NOTE: This function modifies user state. It should only be called
+        // from the accrual contract (which has already verified user authorization).
+        // In a production deployment, consider validating caller identity.
         let mut profile: UserProfile = env
             .storage()
             .persistent()
@@ -187,6 +190,9 @@ impl RegistryContract {
     }
 
     pub fn increment_bot_count(env: Env, user: Address) -> Result<(), RegistryError> {
+        // SECURITY NOTE: This function modifies user state. It should only be called
+        // from the bot_nft contract (which has already verified user authorization).
+        // In a production deployment, consider validating caller identity.
         let mut profile: UserProfile = env
             .storage()
             .persistent()
@@ -228,6 +234,9 @@ impl RegistryContract {
     }
 
     pub fn add_claimed_amt(env: Env, user: Address, amount: i128) -> Result<(), RegistryError> {
+        // SECURITY NOTE: This function modifies user state. It should only be called
+        // from the accrual contract (which has already verified user authorization).
+        // In a production deployment, consider validating caller identity.
         let mut profile: UserProfile = env
             .storage()
             .persistent()

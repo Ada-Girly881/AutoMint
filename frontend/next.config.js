@@ -1,4 +1,8 @@
 /** @type {import('next').NextConfig} */
+const withBundleAnalyzer = require("@next/bundle-analyzer")({
+  enabled: process.env.ANALYZE === "true",
+});
+
 const publicEnv = [
   'NEXT_PUBLIC_NETWORK',
   'NEXT_PUBLIC_SOROBAN_RPC_URL',
@@ -50,4 +54,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withBundleAnalyzer(nextConfig);

@@ -1,7 +1,21 @@
-import { parseUserProfile, parseBotNFT, parseListing } from "./contracts";
+import { parseListing, parseUserProfile, parseBotNFT } from "./contracts";
 
 describe("parse helpers in contracts.ts", () => {
   describe("parseUserProfile", () => {
+    it("should parse raw user profile data correctly with total_points or points", () => {
+      const rawData = {
+        username: "alice",
+        points: "150",
+      };
+
+      const result = parseUserProfile(rawData);
+
+      expect(result).toEqual({
+        username: "alice",
+        points: 150n,
+      });
+    });
+
     it("parses correctly with bigint points", () => {
       const raw = { username: "alice", points: 100n };
       const parsed = parseUserProfile(raw);
@@ -24,6 +38,30 @@ describe("parse helpers in contracts.ts", () => {
       minted_at: 123456789,
       last_claim_timestamp: 123456789n,
     };
+
+    it("should parse raw bot NFT data correctly with string tier", () => {
+      const rawData = {
+        id: 10,
+        name: "Bot #10",
+        owner: "GXYZ987654321",
+        tier: "Gold",
+        accrual_rate: "50",
+        minted_at: 1690000000,
+        last_claim_timestamp: "1690005000",
+      };
+
+      const result = parseBotNFT(rawData);
+
+      expect(result).toEqual({
+        id: 10n,
+        name: "Bot #10",
+        owner: "GXYZ987654321",
+        tier: "Gold",
+        accrual_rate: 50n,
+        minted_at: 1690000000,
+        last_claim_timestamp: 1690005000n,
+      });
+    });
 
     it("parses tier as string", () => {
       const parsed = parseBotNFT({ ...baseRaw, tier: "Premium" });
@@ -63,16 +101,24 @@ describe("parse helpers in contracts.ts", () => {
   });
 
   describe("parseListing", () => {
-    it("parses listing correctly", () => {
-      const raw = {
-        id: 100n,
-        seller: "GBDUJF...",
-        bot_id: 5n,
-        price: 500n,
-        listed_at: 123456789n,
+    it("should parse a valid raw marketplace listing map into a MarketplaceListing object", () => {
+      const rawData = {
+        id: "1",
+        seller: "GABC1234567890",
+        bot_id: 42,
+        price: "1000000000",
+        listed_at: 1700000000n,
       };
-      const parsed = parseListing(raw);
-      expect(parsed).toEqual(raw);
+
+      const result = parseListing(rawData);
+
+      expect(result).toEqual({
+        id: 1n,
+        seller: "GABC1234567890",
+        bot_id: 42n,
+        price: 1000000000n,
+        listed_at: 1700000000n,
+      });
     });
 
     it("parses missing fields gracefully", () => {
