@@ -12,6 +12,7 @@ import {
   getNetwork as freighterGetNetwork,
 } from "@stellar/freighter-api";
 import { BASE_FEE, SOROBAN_RPC_URL, STELLAR_NETWORK_PASSPHRASE } from "./constants";
+import { withRetry } from "./rpcRetry";
 
 /**
  * Module-level singleton — created once, reused on every subsequent call.
@@ -155,7 +156,7 @@ export async function simulateContractCall(
     .setTimeout(30)
     .build();
 
-  const result = await server.simulateTransaction(tx);
+  const result = await withRetry(() => server.simulateTransaction(tx));
 
   if (SorobanRpc.Api.isSimulationError(result)) {
     throw new Error(`Simulation failed for ${method}: ${result.error}`);
@@ -201,7 +202,7 @@ export async function buildPreparedTx(
     .setTimeout(30)
     .build();
 
-  const prepared = await server.prepareTransaction(tx);
+  const prepared = await withRetry(() => server.prepareTransaction(tx));
   return prepared.toXDR();
 }
 

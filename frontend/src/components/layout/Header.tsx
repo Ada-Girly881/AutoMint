@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Wallet, LogOut } from "lucide-react";
+import { Menu, X, Wallet, LogOut, AlertTriangle } from "lucide-react";
 import clsx from "clsx";
 import { useWallet } from "@/hooks/useWallet";
 
@@ -21,7 +21,7 @@ function truncateAddress(address: string): string {
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
-  const { publicKey, isConnected, connect, disconnect } = useWallet();
+  const { publicKey, isConnected, networkMismatch, connect, disconnect } = useWallet();
 
   // Close mobile menu on Escape
   const handleKeyDown = useCallback(
@@ -59,6 +59,15 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-liner bg-bg/80 backdrop-blur-xl">
+      {networkMismatch && (
+        <div className="bg-yellow-500/10 border-b border-yellow-500/30 px-4 py-2 flex items-center gap-2 text-sm text-yellow-200" role="alert">
+          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>
+            Freighter is connected to the wrong network.{" "}
+            <strong>Switch to Testnet</strong> in Freighter settings to continue.
+          </span>
+        </div>
+      )}
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         <Link
           href="/"

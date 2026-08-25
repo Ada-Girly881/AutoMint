@@ -77,6 +77,8 @@ export function useRegistered() {
       publicKey ? isRegistered(publicKey) : Promise.resolve(false),
     enabled: !!publicKey,
     refetchInterval: POLL_INTERVAL,
+    staleTime: 300_000,
+    gcTime: 600_000,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
@@ -92,6 +94,8 @@ export function useProfile() {
       publicKey ? getUserProfile(publicKey) : Promise.resolve(null),
     enabled: !!publicKey,
     refetchInterval: POLL_INTERVAL,
+    staleTime: 30_000,
+    gcTime: 300_000,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
@@ -106,6 +110,8 @@ export function useBots() {
     queryFn: () => (publicKey ? getUserBots(publicKey) : Promise.resolve([])),
     enabled: !!publicKey,
     refetchInterval: POLL_INTERVAL,
+    staleTime: 30_000,
+    gcTime: 300_000,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
@@ -121,6 +127,8 @@ export function useAccrualState() {
       publicKey ? getAccrualState(publicKey) : Promise.resolve(null),
     enabled: !!publicKey,
     refetchInterval: POLL_INTERVAL,
+    staleTime: 30_000,
+    gcTime: 300_000,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
@@ -136,6 +144,8 @@ export function useAmtBalance() {
       publicKey ? getAmtBalance(publicKey) : Promise.resolve(BigInt(0)),
     enabled: !!publicKey,
     refetchInterval: POLL_INTERVAL,
+    staleTime: 30_000,
+    gcTime: 300_000,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
