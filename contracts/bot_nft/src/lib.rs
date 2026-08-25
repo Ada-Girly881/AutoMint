@@ -112,6 +112,8 @@ impl BotNFTContract {
         if env.storage().instance().has(&DataKey::Initialized) {
             return Err(BotNFTError::AlreadyInitialized);
         }
+        admin.require_auth();
+
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::NextId, &1u64);
         env.storage().instance().set(&DataKey::Initialized, &true);
@@ -172,9 +174,8 @@ impl BotNFTContract {
             Tier::Advanced => BotTier::Bronze,
             Tier::Premium => BotTier::Silver,
         };
-        let name = bot_tier.name(&env);
-
         // Create and store the bot
+        let name = bot_tier.name(&env);
         let bot = BotNFT {
             id: bot_id,
             owner: owner.clone(),
@@ -261,7 +262,7 @@ impl BotNFTContract {
 
     fn get_next_id(env: &Env) -> u64 {
         let id: u64 = env.storage().instance().get(&DataKey::NextId).unwrap_or(1);
-        env.storage().instance().set(&DataKey::NextId, &(id + 1));
+        env.storage().instance().set(&DataKey::NextId, &(id.saturating_add(1)));
         id
     }
 

@@ -22,7 +22,9 @@ const POLL_INTERVAL = 30000; // Poll every 30 seconds
 
 export function useRegister() {
   const queryClient = useQueryClient();
-  const publicKey = useWalletStore((s: { publicKey: string | null }) => s.publicKey);
+  const publicKey = useWalletStore(
+    (s: { publicKey: string | null }) => s.publicKey,
+  );
 
   return useMutation({
     mutationFn: async (username: string) => {
@@ -67,73 +69,97 @@ export function useRegister() {
 
 /** Whether the connected wallet address is registered in the registry contract. */
 export function useRegistered() {
-  const address = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore((s) => s.publicKey);
 
   return useQuery<boolean>({
-    queryKey: ["registered", address],
-    queryFn: () => (address ? isRegistered(address) : Promise.resolve(false)),
-    enabled: !!address,
+    queryKey: ["registered", publicKey],
+    queryFn: () =>
+      publicKey ? isRegistered(publicKey) : Promise.resolve(false),
+    enabled: !!publicKey,
     refetchInterval: POLL_INTERVAL,
+    staleTime: 300_000,
+    gcTime: 600_000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 }
 
 /** Registry profile (username, points) for the connected wallet address. */
 export function useProfile() {
-  const address = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore((s) => s.publicKey);
 
   return useQuery<UserProfile | null>({
-    queryKey: ["profile", address],
-    queryFn: () => (address ? getUserProfile(address) : Promise.resolve(null)),
-    enabled: !!address,
+    queryKey: ["profile", publicKey],
+    queryFn: () =>
+      publicKey ? getUserProfile(publicKey) : Promise.resolve(null),
+    enabled: !!publicKey,
     refetchInterval: POLL_INTERVAL,
+    staleTime: 30_000,
+    gcTime: 300_000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 }
 
 /** Bot IDs owned by the connected wallet address, from the bot_nft contract. */
 export function useBots() {
-  const address = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore((s) => s.publicKey);
 
   return useQuery<bigint[]>({
-    queryKey: ["bots", address],
-    queryFn: () => (address ? getUserBots(address) : Promise.resolve([])),
-    enabled: !!address,
+    queryKey: ["bots", publicKey],
+    queryFn: () => (publicKey ? getUserBots(publicKey) : Promise.resolve([])),
+    enabled: !!publicKey,
     refetchInterval: POLL_INTERVAL,
+    staleTime: 30_000,
+    gcTime: 300_000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 }
 
 /** Accrual state (last claim timestamp, cumulative claimed points) for the connected wallet address. */
 export function useAccrualState() {
-  const address = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore((s) => s.publicKey);
 
   return useQuery<AccrualState | null>({
-    queryKey: ["accrualState", address],
-    queryFn: () => (address ? getAccrualState(address) : Promise.resolve(null)),
-    enabled: !!address,
+    queryKey: ["accrualState", publicKey],
+    queryFn: () =>
+      publicKey ? getAccrualState(publicKey) : Promise.resolve(null),
+    enabled: !!publicKey,
     refetchInterval: POLL_INTERVAL,
+    staleTime: 30_000,
+    gcTime: 300_000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 }
 
 /** AMT token balance for the connected wallet address, from the token contract. */
 export function useAmtBalance() {
-  const address = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore((s) => s.publicKey);
 
   return useQuery<bigint>({
-    queryKey: ["amtBalance", address],
-    queryFn: () => (address ? getAmtBalance(address) : Promise.resolve(BigInt(0))),
-    enabled: !!address,
+    queryKey: ["amtBalance", publicKey],
+    queryFn: () =>
+      publicKey ? getAmtBalance(publicKey) : Promise.resolve(BigInt(0)),
+    enabled: !!publicKey,
     refetchInterval: POLL_INTERVAL,
+    staleTime: 30_000,
+    gcTime: 300_000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 }
 
 /** Claims accrued points (converting to AMT where the threshold is met). */
 export function useClaim() {
   const queryClient = useQueryClient();
-  const address = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore((s) => s.publicKey);
 
   return useMutation({
     mutationFn: async () => {
-      if (!address) throw new Error("Wallet not connected");
-      return claimPoints(address);
+      if (!publicKey) throw new Error("Wallet not connected");
+      return claimPoints(publicKey);
     },
     onSuccess: () => {
       toast.success("Points claimed successfully!");
@@ -181,7 +207,9 @@ export function useAnimatedPoints(ratePerHour: number = BASIC_BOT_RATE) {
       }
 
       // Calculate points earned since last claim
-      const pointsEarned = BigInt(Math.floor((elapsedSeconds * ratePerHour) / POINTS_PER_HOUR_DIVISOR));
+      const pointsEarned = BigInt(
+        Math.floor((elapsedSeconds * ratePerHour) / POINTS_PER_HOUR_DIVISOR),
+      );
       const totalPoints = accrualState.total_claimed_points + pointsEarned;
 
       setDisplayedPoints(totalPoints);
