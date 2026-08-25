@@ -12,9 +12,10 @@ import {
   MARKETPLACE_CONTRACT_ID,
   TOKEN_CONTRACT_ID,
   ACCRUAL_CONTRACT_ID,
+  BASE_FEE,
   STELLAR_NETWORK_PASSPHRASE,
 } from "./constants";
-import { getServer, simulateContractCall } from "./stellar";
+import { getServer, simulateContractCall, buildPreparedTx } from "./stellar";
 import type { BotNFT, UserProfile, BotTier, MarketplaceListing, AccrualState } from "@/types";
 
 const toBigInt = (v: unknown): bigint =>
@@ -36,6 +37,10 @@ function defaultSource(sourceAddress?: string): string {
 /**
  * Build a state-changing transaction that invokes `method(...args)` on
  * `contractId` and return its base64 XDR for the wallet to sign.
+ *
+ * Delegates to {@link buildPreparedTx}, which simulates the call so the
+ * returned XDR carries the correct Soroban resource fee and footprint, not
+ * just the BASE_FEE inclusion fee.
  */
 async function buildTxXdr(
   contractId: string,
@@ -43,19 +48,7 @@ async function buildTxXdr(
   args: xdr.ScVal[],
   sourceAddress: string
 ): Promise<string> {
-  const server = getServer();
-  const contract = new Contract(contractId);
-  const account = await server.getAccount(sourceAddress);
-
-  const tx = new TransactionBuilder(account, {
-    fee: "100",
-    networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
-  })
-    .addOperation(contract.call(method, ...args))
-    .setTimeout(30)
-    .build();
-
-  return tx.toXDR();
+  return buildPreparedTx(contractId, method, args, sourceAddress);
 }
 
 /**
@@ -390,7 +383,7 @@ export async function getPendingPoints(userAddress: string): Promise<bigint> {
   const result = await server.simulateTransaction(
     new TransactionBuilder(
       await server.getAccount(userAddress),
-      { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
+      { fee: BASE_FEE, networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
     )
       .addOperation(contract.call("pending_points", nativeToScVal(userAddress, { type: "address" })))
       .setTimeout(30)
@@ -413,25 +406,16 @@ export async function getPendingPoints(userAddress: string): Promise<bigint> {
  * threshold is met. Calls the accrual contract's claim() function.
  */
 export async function claimPoints(userAddress: string): Promise<string> {
-  const server = getServer();
-  const contract = new Contract(ACCRUAL_CONTRACT_ID);
-
-  const txBuilder = new TransactionBuilder(
-    await server.getAccount(userAddress),
-    { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
-  )
-    .addOperation(
-      contract.call(
-        "claim",
-        nativeToScVal(userAddress, { type: "address" }),
-        nativeToScVal(TOKEN_CONTRACT_ID, { type: "address" }),
-        nativeToScVal(REGISTRY_CONTRACT_ID, { type: "address" })
-      )
-    )
-    .setTimeout(30)
-    .build();
-
-  return txBuilder.toXDR();
+  return buildTxXdr(
+    ACCRUAL_CONTRACT_ID,
+    "claim",
+    [
+      nativeToScVal(userAddress, { type: "address" }),
+      nativeToScVal(TOKEN_CONTRACT_ID, { type: "address" }),
+      nativeToScVal(REGISTRY_CONTRACT_ID, { type: "address" }),
+    ],
+    userAddress
+  );
 }
 
 /**
@@ -463,7 +447,7 @@ export async function getUserBots(userAddress: string): Promise<bigint[]> {
   const result = await server.simulateTransaction(
     new TransactionBuilder(
       await server.getAccount(userAddress),
-      { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
+      { fee: BASE_FEE, networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
     )
       .addOperation(contract.call("get_user_bots", nativeToScVal(userAddress, { type: "address" })))
       .setTimeout(30)
@@ -497,7 +481,7 @@ export async function getBotById(
   const result = await server.simulateTransaction(
     new TransactionBuilder(
       await server.getAccount(userAddress),
-      { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
+      { fee: BASE_FEE, networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
     )
       .addOperation(contract.call("get_bot", nativeToScVal(botId, { type: "u64" })))
       .setTimeout(30)
@@ -529,7 +513,7 @@ export async function getUserTotalRate(userAddress: string): Promise<bigint> {
   const result = await server.simulateTransaction(
     new TransactionBuilder(
       await server.getAccount(userAddress),
-      { fee: "100", networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
+      { fee: BASE_FEE, networkPassphrase: STELLAR_NETWORK_PASSPHRASE }
     )
       .addOperation(contract.call("get_user_total_rate", nativeToScVal(userAddress, { type: "address" })))
       .setTimeout(30)
