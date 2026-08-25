@@ -1,3 +1,4 @@
+import { SorobanRpc } from "@stellar/stellar-sdk";
 import {
   Contract,
   SorobanRpc,
@@ -11,6 +12,7 @@ import {
   requestAccess as freighterRequestAccess,
   getNetwork as freighterGetNetwork,
 } from "@stellar/freighter-api";
+import { SOROBAN_RPC_URL } from "./constants";
 import { BASE_FEE, SOROBAN_RPC_URL, STELLAR_NETWORK_PASSPHRASE } from "./constants";
 import { withRetry } from "./rpcRetry";
 
@@ -25,10 +27,6 @@ let _server: SorobanRpc.Server | null = null;
  * Returns a memoized {@link SorobanRpc.Server} pointed at the configured
  * {@link SOROBAN_RPC_URL}.  The instance is created on the first call and
  * the same object is returned on every subsequent call.
- *
- * @example
- * const server = getServer();
- * const account = await server.getAccount(publicKey);
  */
 export function getServer(): SorobanRpc.Server {
   if (!_server) {
@@ -87,12 +85,7 @@ export async function connectFreighter(): Promise<{
       "Freighter wallet extension is not installed or could not be detected."
     );
   }
-  if (connected?.error) {
-    throw new Error(
-      "Freighter wallet extension is not installed or could not be detected."
-    );
-  }
-  if (!connected?.isConnected) {
+  if (connected?.error || !connected?.isConnected) {
     throw new Error(
       "Freighter wallet extension is not installed or could not be detected."
     );
@@ -113,7 +106,7 @@ export async function connectFreighter(): Promise<{
     throw new Error("Freighter did not return a public key.");
   }
 
-  // 3. Fetch the active network.
+  // 3. Fetch the active network (best-effort).
   let network = "";
   try {
     const net = await freighterGetNetwork();
@@ -121,8 +114,7 @@ export async function connectFreighter(): Promise<{
       network = net.network;
     }
   } catch {
-    // Network is best-effort; a missing network shouldn't block a successful
-    // connection. Leave it empty rather than failing the whole flow.
+    // A missing network shouldn't block an otherwise successful connection.
   }
 
   return { publicKey: access.address, network };
