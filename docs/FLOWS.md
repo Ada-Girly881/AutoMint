@@ -2,6 +2,8 @@
 
 This document illustrates the cross-contract call sequences for the four core AutoMint flows: **register**, **claim**, **list**, and **buy**. Contract names match the crates under [`contracts/`](../contracts): `registry`, `bot_nft`, `accrual`, `marketplace`, `token`.
 
+For testnet end-to-end manual verification steps and evidence capture, see [`MANUAL_TEST_REPORT.md`](./MANUAL_TEST_REPORT.md).
+
 ## Register
 
 A new user creates a profile in the Registry, then starts their point-accrual clock.
