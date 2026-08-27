@@ -1,13 +1,14 @@
 'use client';
 
-import { useProfile, useBots } from '@/hooks/useAccrual';
-import { useWalletStore } from '@/store/walletStore';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { useWalletStore } from '@/store/walletStore';
+import { useProfile, useBots } from '@/hooks/useAccrual';
+import { toast } from 'sonner';
 
 export default function ProfilePage() {
   const publicKey = useWalletStore((s) => s.publicKey);
-  const { data: profile, isLoading: profileLoading } = useProfile();
-  const { data: bots, isLoading: botsLoading } = useBots();
+  const { data: profile, isLoading: profileLoading, isError: profileError } = useProfile();
+  const { data: bots, isLoading: botsLoading, isError: botsError } = useBots();
 
   if (!publicKey) {
     return (
@@ -20,6 +21,22 @@ export default function ProfilePage() {
             Please connect your wallet to view your profile
           </p>
         </div>
+      </div>
+    );
+  }
+
+  if (profileError || botsError) {
+    return (
+      <div className="mx-auto max-w-4xl px-4 py-8">
+        <p className="text-center text-gray-600 dark:text-gray-400 mb-6">
+          Failed to load profile data. Please try again.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-gold/60 hover:text-gold transition-colors"
+        >
+          Retry
+        </button>
       </div>
     );
   }
