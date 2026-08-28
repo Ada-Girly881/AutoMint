@@ -11,6 +11,7 @@
     "test": "jest",
     "test:ci": "jest --ci --coverage",
     "analyze": "ANALYZE=true next build",
+    "lhci": "lhci autorun",
     "check-bundle-size": "node scripts/check-bundle-size.js"
   },
   "dependencies": {
@@ -28,6 +29,7 @@
     "zustand": "^4.5.4"
   },
   "devDependencies": {
+    "@lhci/cli": "^0.15.1",
     "@babel/core": "^7.29.7",
     "@babel/preset-env": "^7.29.7",
     "@babel/preset-react": "^7.29.7",

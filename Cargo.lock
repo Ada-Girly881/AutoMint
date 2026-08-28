@@ -85,6 +85,11 @@ dependencies = [
 name = "automint-testutils"
 version = "0.1.0"
 dependencies = [
+ "automint-accrual",
+ "automint-bot-nft",
+ "automint-marketplace",
+ "automint-registry",
+ "automint-token",
  "soroban-sdk",
 ]
 
