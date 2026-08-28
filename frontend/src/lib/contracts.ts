@@ -29,8 +29,9 @@ const toBigInt = (v: unknown): bigint =>
  */
 function defaultSource(sourceAddress?: string): string {
   if (sourceAddress) return sourceAddress;
-  if (typeof window !== "undefined" && (window as any).selectedPublicKey) {
-    return (window as any).selectedPublicKey as string;
+  if (typeof window !== "undefined") {
+    const win = window as unknown as { selectedPublicKey?: string };
+    if (win.selectedPublicKey) return win.selectedPublicKey;
   }
   throw new Error("No source address available for contract simulation");
 }

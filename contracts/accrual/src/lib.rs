@@ -664,3 +664,152 @@ mod test {
         assert_eq!(profile.claimed_amt, 2);
     }
 }
+
+// ── Issue #543: explicit authorization tests ──────────────────────────────
+//
+// The module above uses `mock_all_auths()`, which makes every
+// `require_auth()` call succeed unconditionally and therefore cannot catch a
+// missing or incorrect auth check. Each test here exercises one
+// `require_auth()` call site directly: the call must fail when the required
+// signer has not authorized it, and succeed when that signer's authorization
+// is explicitly mocked for exactly that invocation.
+#[cfg(test)]
+mod auth_tests {
+    use super::*;
+    use soroban_sdk::testutils::{Address as _, MockAuth, MockAuthInvoke};
+    use soroban_sdk::{Env, IntoVal, String};
+
+    struct Ctx {
+        env: Env,
+        id: Address,
+        client: AccrualContractClient<'static>,
+        registry_id: Address,
+        token_id: Address,
+    }
+
+    fn setup() -> Ctx {
+        let env = Env::default();
+        let id = env.register_contract(None, AccrualContract);
+        let client = AccrualContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+
+        let registry_id = env.register_contract(None, automint_registry::RegistryContract);
+        let reg_client = automint_registry::RegistryContractClient::new(&env, &registry_id);
+        let token_id = env.register_contract(None, automint_token::AMTToken);
+        let token_client = automint_token::AMTTokenClient::new(&env, &token_id);
+
+        env.mock_all_auths();
+        reg_client.initialize(&admin);
+        token_client.initialize(
+            &admin,
+            &7u32,
+            &String::from_str(&env, "AutoMint Token"),
+            &String::from_str(&env, "AMT"),
+        );
+        client.initialize(&admin, &100_u64);
+
+        Ctx {
+            env,
+            id,
+            client,
+            registry_id,
+            token_id,
+        }
+    }
+
+    #[test]
+    fn test_initialize_fails_without_admin_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, AccrualContract);
+        let client = AccrualContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+
+        let result = client.try_initialize(&admin, &100_u64);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_initialize_succeeds_with_admin_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, AccrualContract);
+        let client = AccrualContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+
+        env.mock_auths(&[MockAuth {
+            address: &admin,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "initialize",
+                args: (admin.clone(), 100_u64).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_initialize(&admin, &100_u64);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_start_accrual_fails_without_user_auth() {
+        let ctx = setup();
+        let user = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx.client.try_start_accrual(&user, &5_u64);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_start_accrual_succeeds_with_user_auth() {
+        let ctx = setup();
+        let user = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &user,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "start_accrual",
+                args: (user.clone(), 5_u64).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx.client.try_start_accrual(&user, &5_u64);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_claim_fails_without_user_auth() {
+        let ctx = setup();
+        let user = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.start_accrual(&user, &5_u64);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx
+            .client
+            .try_claim(&user, &ctx.token_id, &ctx.registry_id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_claim_succeeds_with_user_auth() {
+        let ctx = setup();
+        let user = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.start_accrual(&user, &5_u64);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &user,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "claim",
+                args: (user.clone(), ctx.token_id.clone(), ctx.registry_id.clone())
+                    .into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx
+            .client
+            .try_claim(&user, &ctx.token_id, &ctx.registry_id);
+        assert!(result.is_ok());
+    }
+}

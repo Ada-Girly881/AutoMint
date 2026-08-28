@@ -811,3 +811,188 @@ mod test {
     }
 }
 
+// ── Issue #543: explicit authorization tests ──────────────────────────────
+//
+// The module above uses `mock_all_auths()`, which makes every
+// `require_auth()` call succeed unconditionally and therefore cannot catch a
+// missing or incorrect auth check. Each test here exercises one
+// `require_auth()` call site directly: the call must fail when the required
+// signer has not authorized it, and succeed when that signer's authorization
+// is explicitly mocked for exactly that invocation.
+#[cfg(test)]
+mod auth_tests {
+    use super::*;
+    use soroban_sdk::testutils::{Address as _, MockAuth, MockAuthInvoke};
+    use soroban_sdk::{Env, IntoVal};
+
+    fn setup_registry(env: &Env) -> Address {
+        let admin = Address::generate(env);
+        let registry_id = env.register_contract(None, automint_registry::RegistryContract);
+        let reg_client = automint_registry::RegistryContractClient::new(env, &registry_id);
+        env.mock_all_auths();
+        reg_client.initialize(&admin);
+        registry_id
+    }
+
+    #[test]
+    fn test_initialize_fails_without_admin_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+
+        env.mock_auths(&[]);
+        let result = client.try_initialize(&admin, &registry_id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_initialize_succeeds_with_admin_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+
+        env.mock_auths(&[MockAuth {
+            address: &admin,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "initialize",
+                args: (admin.clone(), registry_id.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_initialize(&admin, &registry_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_mint_basic_fails_without_owner_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin, &registry_id);
+
+        let owner = Address::generate(&env);
+        env.mock_auths(&[]);
+        let result = client.try_mint_basic(&owner);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mint_basic_succeeds_with_owner_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin, &registry_id);
+
+        let owner = Address::generate(&env);
+        env.mock_auths(&[MockAuth {
+            address: &owner,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "mint_basic",
+                args: (owner.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_mint_basic(&owner);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_mint_tier_fails_without_owner_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin, &registry_id);
+
+        let token_id = env.register_contract(None, automint_token::AMTToken);
+        let owner = Address::generate(&env);
+        env.mock_auths(&[]);
+        let result = client.try_mint_tier(&owner, &Tier::Basic, &token_id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mint_tier_succeeds_with_owner_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin, &registry_id);
+
+        let token_id = env.register_contract(None, automint_token::AMTToken);
+        let owner = Address::generate(&env);
+        // Tier::Basic carries a zero price, so no token transfer is required.
+        env.mock_auths(&[MockAuth {
+            address: &owner,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "mint_tier",
+                args: (owner.clone(), Tier::Basic, token_id.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_mint_tier(&owner, &Tier::Basic, &token_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_transfer_fails_without_from_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin, &registry_id);
+        let owner = Address::generate(&env);
+        let bot_id = client.mint_basic(&owner);
+
+        let to = Address::generate(&env);
+        env.mock_auths(&[]);
+        let result = client.try_transfer(&bot_id, &owner, &to);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_transfer_succeeds_with_from_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin, &registry_id);
+        let owner = Address::generate(&env);
+        let bot_id = client.mint_basic(&owner);
+
+        let to = Address::generate(&env);
+        env.mock_auths(&[MockAuth {
+            address: &owner,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "transfer",
+                args: (bot_id, owner.clone(), to.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_transfer(&bot_id, &owner, &to);
+        assert!(result.is_ok());
+    }
+}
+

@@ -1,4 +1,3 @@
-import { SorobanRpc } from "@stellar/stellar-sdk";
 import {
   Contract,
   SorobanRpc,
@@ -12,7 +11,6 @@ import {
   requestAccess as freighterRequestAccess,
   getNetwork as freighterGetNetwork,
 } from "@stellar/freighter-api";
-import { SOROBAN_RPC_URL } from "./constants";
 import { BASE_FEE, SOROBAN_RPC_URL, STELLAR_NETWORK_PASSPHRASE } from "./constants";
 import { withRetry } from "./rpcRetry";
 

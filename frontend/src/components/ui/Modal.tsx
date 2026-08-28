@@ -28,8 +28,10 @@ export default function Modal({ isOpen, onClose, title, description, children }:
     const focusable = contentRef.current.querySelectorAll<HTMLElement>(FOCUSABLE);
     if (focusable.length === 0) return;
 
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
+    // `focusable.length === 0` already returned above, so both ends exist —
+    // non-null assertion needed under `noUncheckedIndexedAccess`.
+    const first = focusable[0]!;
+    const last = focusable[focusable.length - 1]!;
 
     if (e.shiftKey) {
       if (document.activeElement === first) {
