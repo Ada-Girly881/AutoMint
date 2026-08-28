@@ -3,7 +3,7 @@
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useWalletStore } from "@/store/walletStore";
 import { useListings } from "@/hooks/useMarketplace";
-import { BotListingCard } from "@/components/marketplace/BotListingCard";
+import BotListingCard from "@/components/marketplace/BotListingCard";
 import { toast } from "sonner";
 
 export default function MarketplacePage() {
