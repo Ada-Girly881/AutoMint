@@ -314,6 +314,9 @@ impl RegistryContract {
 }
 
 #[cfg(test)]
+extern crate std;
+
+#[cfg(test)]
 mod test {
     use super::*;
     use soroban_sdk::{testutils::Address as _, Env, String};
@@ -347,9 +350,8 @@ mod test {
         let (env, _admin, client) = setup();
         let user = Address::generate(&env);
         client.register(&user, &String::from_str(&env, "Alice"));
-        assert!(client
-            .try_register(&user, &String::from_str(&env, "Alice2"))
-            .is_err());
+        let result = client.try_register(&user, &String::from_str(&env, "Alice2"));
+        assert_eq!(result, Err(Ok(RegistryError::AlreadyRegistered)));
     }
 
     // #40: Test username collision
@@ -359,9 +361,8 @@ mod test {
         let user1 = Address::generate(&env);
         let user2 = Address::generate(&env);
         client.register(&user1, &String::from_str(&env, "Bob"));
-        assert!(client
-            .try_register(&user2, &String::from_str(&env, "Bob"))
-            .is_err());
+        let result = client.try_register(&user2, &String::from_str(&env, "Bob"));
+        assert_eq!(result, Err(Ok(RegistryError::UsernameTaken)));
     }
 
     // #40: Test invalid username (empty)
@@ -369,9 +370,8 @@ mod test {
     fn test_empty_username_fails() {
         let (env, _admin, client) = setup();
         let user = Address::generate(&env);
-        assert!(client
-            .try_register(&user, &String::from_str(&env, ""))
-            .is_err());
+        let result = client.try_register(&user, &String::from_str(&env, ""));
+        assert_eq!(result, Err(Ok(RegistryError::UsernameTaken)));
     }
 
     // #40: Test invalid username (too long)
@@ -380,7 +380,8 @@ mod test {
         let (env, _admin, client) = setup();
         let user = Address::generate(&env);
         let long_name = String::from_str(&env, "thisistoolongusernamethatexceedsthelimit");
-        assert!(client.try_register(&user, &long_name).is_err());
+        let result = client.try_register(&user, &long_name);
+        assert_eq!(result, Err(Ok(RegistryError::UsernameTaken)));
     }
 
     // #40: Test add_points accumulation
@@ -420,7 +421,8 @@ mod test {
     fn test_get_user_not_found() {
         let (env, _admin, client) = setup();
         let ghost = Address::generate(&env);
-        assert!(client.try_get_user(&ghost).is_err());
+        let result = client.try_get_user(&ghost);
+        assert!(matches!(result, Err(Ok(RegistryError::NotRegistered))));
     }
 
     #[test]
@@ -552,7 +554,8 @@ mod test {
         let env = Env::default();
         let id = env.register_contract(None, RegistryContract);
         let client = RegistryContractClient::new(&env, &id);
-        assert!(client.try_admin().is_err());
+        let result = client.try_admin();
+        assert_eq!(result, Err(Ok(RegistryError::NotInitialized)));
     }
 
     #[test]
@@ -560,7 +563,7 @@ mod test {
         let (env, _admin, client) = setup();
         let ghost = Address::generate(&env);
         let result = client.try_get_user(&ghost);
-        assert!(result.is_err());
+        assert!(matches!(result, Err(Ok(RegistryError::NotRegistered))));
     }
 
     #[test]
@@ -592,7 +595,8 @@ mod test {
     fn test_add_claimed_amt_unregistered_fails() {
         let (env, _admin, client) = setup();
         let ghost = Address::generate(&env);
-        assert!(client.try_add_claimed_amt(&ghost, &100_i128).is_err());
+        let result = client.try_add_claimed_amt(&ghost, &100_i128);
+        assert_eq!(result, Err(Ok(RegistryError::NotRegistered)));
     }
 
     #[test]
@@ -619,7 +623,8 @@ mod test {
     fn test_add_points_unregistered_fails() {
         let (env, _admin, client) = setup();
         let ghost = Address::generate(&env);
-        assert!(client.try_add_points(&ghost, &100_u64).is_err());
+        let result = client.try_add_points(&ghost, &100_u64);
+        assert_eq!(result, Err(Ok(RegistryError::NotRegistered)));
     }
 
     #[test]
@@ -950,5 +955,98 @@ mod test {
         client.add_claimed_amt(&user, &50_i128);
         client.increment_bot_count(&user);
         assert_eq!(client.total_users(), 1);
+    }
+
+    // --- Issue #544: storage TTL / archival coverage ---
+    //
+    // UserProfile is written to *persistent* storage and its TTL is bumped
+    // via `extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP)` on every write. If that
+    // TTL is allowed to lapse, the entry becomes archived and inaccessible —
+    // exactly the class of bug behind AM-028/AM-048/AM-080. These tests
+    // simulate ledger advancement with `automint_testutils::advance_ledger`
+    // to exercise that behaviour directly instead of only trusting the SDK's
+    // (non-expiring, by default) test `Env`.
+
+    // Control case: well within the TTL window, the profile must still be
+    // readable.
+    #[test]
+    fn test_user_profile_survives_before_ttl_expiry() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "Ttl1"));
+
+        // Advance by less than LEDGER_BUMP — well before expiry.
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP / 2);
+
+        let profile = client.get_user(&user);
+        assert_eq!(profile.username, String::from_str(&env, "Ttl1"));
+    }
+
+    // An entry whose TTL is never refreshed becomes archived once the
+    // ledger sequence passes its live_until_ledger_seq (write time +
+    // LEDGER_BUMP, set by both `register`'s persistent- and instance-level
+    // `extend_ttl` calls). Once archived, reading it must fail rather than
+    // silently returning stale/missing data.
+    //
+    // The test harness escalates archived-entry access to a hard panic
+    // (matching mainnet: an archived entry means the transaction never
+    // reaches the contract at all), even through `try_*` client methods, so
+    // we assert on that panic via `catch_unwind` instead of a `Result`.
+    #[test]
+    fn test_user_profile_archived_after_ttl_expiry() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "Ttl2"));
+
+        automint_testutils::advance_past_ttl(&env, LEDGER_BUMP);
+
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            client.get_user(&user)
+        }));
+        assert!(outcome.is_err(), "expected archived entry access to fail");
+    }
+
+    // Calling a function that touches the profile (and therefore calls
+    // `extend_ttl` again, e.g. `add_points`) shortly before expiry must
+    // reset the TTL clock, so the entry survives past what would have been
+    // its original expiry ledger.
+    //
+    // Note: the *contract instance* (Admin/Initialized/TotalUsers/UserList)
+    // has its own independent TTL, bumped only by `initialize`/`register`.
+    // To isolate the behaviour we care about (the user profile's TTL
+    // renewal), this test also registers a second, unrelated "keepalive"
+    // user at the same checkpoint purely to keep the instance itself alive
+    // — without that, the whole contract instance would archive first and
+    // mask the assertion we're actually after.
+    //
+    // Verified manually that this test actually exercises the renewal (not
+    // just Env defaults) by temporarily removing the
+    // `env.storage().persistent().extend_ttl(...)` call for
+    // `DataKey::UserProfile` inside `add_points`: with it removed, this
+    // test fails with an archived-entry panic at the final `get_user`,
+    // confirming the assertion is meaningful and not just passing by
+    // default.
+    #[test]
+    fn test_extend_ttl_call_restores_access_near_expiry() {
+        let (env, _admin, client) = setup();
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "Ttl3"));
+
+        // Advance to just before the original expiry ledger, then touch the
+        // entry via add_points (renews the profile TTL) and register a
+        // throwaway user (renews the instance TTL).
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP - 1);
+        client.add_points(&user, &10_u64);
+        let keepalive = Address::generate(&env);
+        client.register(&keepalive, &String::from_str(&env, "Keepalive"));
+
+        // Advance well past what would have been the *original* expiry
+        // ledger (write time + LEDGER_BUMP). Without the renewal above, the
+        // profile entry would now be archived.
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP);
+
+        let profile = client.get_user(&user);
+        assert_eq!(profile.username, String::from_str(&env, "Ttl3"));
+        assert_eq!(profile.total_points, 10);
     }
 }

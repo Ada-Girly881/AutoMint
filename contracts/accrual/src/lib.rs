@@ -214,6 +214,12 @@ impl AccrualContract {
             LEDGER_THRESHOLD,
             LEDGER_BUMP,
         );
+        // #544: keep the contract instance itself alive on write activity
+        // too — mirrors `registry::register` and the analogous fixes in
+        // bot_nft::transfer and token::do_transfer/burn.
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
         env.events().publish(
             (symbol_short!("claim"), user),
@@ -234,6 +240,9 @@ impl AccrualContract {
             .ok_or(AccrualError::NotInitialized)
     }
 }
+
+#[cfg(test)]
+extern crate std;
 
 #[cfg(test)]
 mod test {
@@ -285,7 +294,8 @@ mod test {
     #[test]
     fn test_double_initialize_fails() {
         let (env, _admin, _registry, _token, client) = setup();
-        assert!(client.try_initialize(&_admin, &100_u64).is_err());
+        let result = client.try_initialize(&_admin, &100_u64);
+        assert_eq!(result, Err(Ok(AccrualError::AlreadyInitialized)));
     }
 
     #[test]
@@ -295,7 +305,8 @@ mod test {
         let id = env.register_contract(None, AccrualContract);
         let client = AccrualContractClient::new(&env, &id);
         let admin = Address::generate(&env);
-        assert!(client.try_initialize(&admin, &0_u64).is_err());
+        let result = client.try_initialize(&admin, &0_u64);
+        assert_eq!(result, Err(Ok(AccrualError::Unauthorized)));
     }
 
     #[test]
@@ -326,7 +337,7 @@ mod test {
         let user = Address::generate(&env);
         client.start_accrual(&user, &50_u64);
         let result = client.try_start_accrual(&user, &50_u64);
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(AccrualError::AlreadyStarted)));
     }
 
     #[test]
@@ -407,7 +418,8 @@ mod test {
     fn test_claim_not_started_fails() {
         let (env, _admin, registry, token, client) = setup();
         let user = Address::generate(&env);
-        assert!(client.try_claim(&user, &token, &registry).is_err());
+        let result = client.try_claim(&user, &token, &registry);
+        assert_eq!(result, Err(Ok(AccrualError::NotStarted)));
     }
 
     #[test]
@@ -509,7 +521,8 @@ mod test {
     fn test_claim_unregistered_user_fails() {
         let (env, _admin, _registry, _token, client) = setup();
         let user = Address::generate(&env);
-        assert!(client.try_claim(&user, &_token, &_registry).is_err());
+        let result = client.try_claim(&user, &_token, &_registry);
+        assert_eq!(result, Err(Ok(AccrualError::NotStarted)));
     }
 
     #[test]
@@ -527,7 +540,7 @@ mod test {
         let (env, _admin, _registry, _token, client) = setup();
         let user = Address::generate(&env);
         let result = client.try_pending_points(&user);
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(AccrualError::NotStarted)));
     }
 
     #[test]
@@ -563,7 +576,7 @@ mod test {
         let id = env.register_contract(None, AccrualContract);
         let client = AccrualContractClient::new(&env, &id);
         let result = client.try_config();
-        assert!(result.is_err());
+        assert!(matches!(result, Err(Ok(AccrualError::NotInitialized))));
     }
 
     #[test]
@@ -662,5 +675,82 @@ mod test {
         assert_eq!(profile.total_points, 200);
         // Only the second claim crosses the threshold: 200/100 = 2
         assert_eq!(profile.claimed_amt, 2);
+    }
+
+    // --- Issue #544: storage TTL / archival coverage ---
+    //
+    // UserAccrual is persistent storage bumped via
+    // `extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP)` on `start_accrual` and
+    // `claim`. These tests simulate ledger advancement with
+    // `automint_testutils::advance_ledger` to exercise that TTL/archival
+    // behaviour directly.
+
+    // Control case: accrual state started well within the TTL window is
+    // still readable.
+    #[test]
+    fn test_accrual_state_survives_before_ttl_expiry() {
+        let (env, _admin, _registry, _token, client) = setup();
+        let user = Address::generate(&env);
+        client.start_accrual(&user, &50_u64);
+
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP / 2);
+
+        let state = client.get_accrual_state(&user);
+        assert!(state.is_some());
+    }
+
+    // An accrual entry whose TTL is never refreshed becomes archived once
+    // the ledger sequence passes its live_until_ledger_seq. As with the
+    // other contracts, the whole contract instance shares the same TTL
+    // bump window here, so accessing anything past that point is rejected
+    // with a hard panic caught via `catch_unwind`.
+    #[test]
+    fn test_accrual_state_archived_after_ttl_expiry() {
+        let (env, _admin, _registry, _token, client) = setup();
+        let user = Address::generate(&env);
+        client.start_accrual(&user, &50_u64);
+
+        automint_testutils::advance_past_ttl(&env, LEDGER_BUMP);
+
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            client.get_accrual_state(&user)
+        }));
+        assert!(outcome.is_err(), "expected archived entry access to fail");
+    }
+
+    // #544 fix verification: `claim` now also renews the contract
+    // instance's TTL (previously only `initialize` did). Advancing to just
+    // before the original expiry, claiming (which renews both the
+    // UserAccrual entry's TTL and the instance's), then advancing well past
+    // the original expiry ledger must still leave the accrual state
+    // readable.
+    //
+    // Verified manually that this test exercises the renewal (not just Env
+    // defaults) by temporarily removing the two `extend_ttl` calls at the
+    // end of `claim`: with them removed, this test fails with an
+    // archived-entry panic at the final `get_accrual_state` call.
+    #[test]
+    fn test_claim_extends_ttl_restores_access_near_expiry() {
+        let (env, _admin, registry, token, client) = setup();
+        let user = Address::generate(&env);
+        register_user(&env, &registry, &user, "ttluser");
+        // Rate 0 keeps pending points (and therefore amt_to_mint) at zero
+        // for the whole test, so `claim` never needs to cross-call the
+        // token contract's `mint` — that path requires nested admin auth
+        // that this test harness's `mock_all_auths()` doesn't satisfy for
+        // non-root invocations, which is an unrelated pre-existing gap
+        // (also hit by test_claim_twice_accumulates_registry_state and
+        // test_claim_updates_registry_total_points_and_claimed_amt). Using
+        // rate 0 isolates the TTL-renewal behaviour this test targets from
+        // that unrelated issue.
+        client.start_accrual(&user, &0_u64);
+
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP - 1);
+        client.claim(&user, &token, &registry);
+
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP);
+
+        let state = client.get_accrual_state(&user);
+        assert!(state.is_some());
     }
 }
