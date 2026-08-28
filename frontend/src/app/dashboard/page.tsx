@@ -13,6 +13,7 @@ import UpgradePrompt from "@/components/dashboard/UpgradePrompt";
 import { BotCardSkeleton } from "@/components/ui/Skeleton";
 import { Wallet, Loader2, Bot } from "lucide-react";
 import clsx from "clsx";
+import type { BotNFT } from "@/types";
 
 export default function DashboardPage() {
   const { publicKey, isConnected, connect, isConnecting } = useWallet();
@@ -171,7 +172,7 @@ export default function DashboardPage() {
 
           {bots && bots.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2">
-              {bots.map((bot: any) => (
+              {bots.map((bot: BotNFT) => (
                 <BotCard key={bot.id.toString()} bot={bot} />
               ))}
             </div>

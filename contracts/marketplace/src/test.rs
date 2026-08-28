@@ -576,3 +576,189 @@ fn test_marketplace_token_registry_integration_multiple_purchases() {
     let seller_receives_per_sale = price - fee;
     assert_eq!(h.token.balance(&seller), seller_receives_per_sale * 2);
 }
+
+// ── Issue #543: explicit authorization tests ──────────────────────────────
+//
+// `setup()` above uses `mock_all_auths()`, which makes every
+// `require_auth()` call succeed unconditionally and therefore cannot catch a
+// missing or incorrect auth check. Each test here exercises one
+// `require_auth()` call site directly: the call must fail when the required
+// signer has not authorized it, and succeed when that signer's authorization
+// is explicitly mocked for exactly that invocation.
+#[cfg(test)]
+mod auth_tests {
+    use super::*;
+    use soroban_sdk::testutils::{Address as _, MockAuth, MockAuthInvoke};
+    use soroban_sdk::IntoVal;
+
+    #[test]
+    fn test_initialize_fails_without_admin_auth() {
+        let h = setup();
+        let mkt_id = h.env.register_contract(None, MarketplaceContract);
+        let mkt = MarketplaceContractClient::new(&h.env, &mkt_id);
+        let admin = Address::generate(&h.env);
+
+        h.env.mock_auths(&[]);
+        let result = mkt.try_initialize(&admin, &h.bot.address, &250u32);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_initialize_succeeds_with_admin_auth() {
+        let h = setup();
+        let mkt_id = h.env.register_contract(None, MarketplaceContract);
+        let mkt = MarketplaceContractClient::new(&h.env, &mkt_id);
+        let admin = Address::generate(&h.env);
+
+        h.env.mock_auths(&[MockAuth {
+            address: &admin,
+            invoke: &MockAuthInvoke {
+                contract: &mkt_id,
+                fn_name: "initialize",
+                args: (admin.clone(), h.bot.address.clone(), 250u32).into_val(&h.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = mkt.try_initialize(&admin, &h.bot.address, &250u32);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_list_bot_fails_without_seller_auth() {
+        let h = setup();
+        let seller = Address::generate(&h.env);
+        let bot_id = h.bot.mint_basic(&seller);
+
+        h.env.mock_auths(&[]);
+        let result = h
+            .mkt
+            .try_list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_list_bot_succeeds_with_seller_auth() {
+        let h = setup();
+        let seller = Address::generate(&h.env);
+        let bot_id = h.bot.mint_basic(&seller);
+
+        // `list_bot` escrows the bot via a cross-contract call into
+        // `bot_nft.transfer(bot_id, seller, marketplace)`, which itself calls
+        // `seller.require_auth()` — so the seller's authorization for the
+        // root `list_bot` invocation must also cover that sub-invocation.
+        h.env.mock_auths(&[MockAuth {
+            address: &seller,
+            invoke: &MockAuthInvoke {
+                contract: &h.mkt.address,
+                fn_name: "list_bot",
+                args: (seller.clone(), bot_id, 50_0000000_i128, h.token.address.clone())
+                    .into_val(&h.env),
+                sub_invokes: &[MockAuthInvoke {
+                    contract: &h.bot.address,
+                    fn_name: "transfer",
+                    args: (bot_id, seller.clone(), h.mkt.address.clone()).into_val(&h.env),
+                    sub_invokes: &[],
+                }],
+            },
+        }]);
+        let result = h
+            .mkt
+            .try_list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_cancel_listing_fails_without_seller_auth() {
+        let h = setup();
+        let seller = Address::generate(&h.env);
+        let bot_id = h.bot.mint_basic(&seller);
+        let listing_id = h
+            .mkt
+            .list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address);
+
+        h.env.mock_auths(&[]);
+        let result = h.mkt.try_cancel_listing(&seller, &listing_id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_cancel_listing_succeeds_with_seller_auth() {
+        let h = setup();
+        let seller = Address::generate(&h.env);
+        let bot_id = h.bot.mint_basic(&seller);
+        let listing_id = h
+            .mkt
+            .list_bot(&seller, &bot_id, &50_0000000_i128, &h.token.address);
+
+        h.env.mock_auths(&[MockAuth {
+            address: &seller,
+            invoke: &MockAuthInvoke {
+                contract: &h.mkt.address,
+                fn_name: "cancel_listing",
+                args: (seller.clone(), listing_id).into_val(&h.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = h.mkt.try_cancel_listing(&seller, &listing_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_buy_bot_fails_without_buyer_auth() {
+        let h = setup();
+        let seller = Address::generate(&h.env);
+        let buyer = Address::generate(&h.env);
+        let price = 100_0000000_i128;
+        h.token.mint(&buyer, &price);
+        let bot_id = h.bot.mint_basic(&seller);
+        let listing_id = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address);
+
+        h.env.mock_auths(&[]);
+        let result = h.mkt.try_buy_bot(&buyer, &listing_id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_buy_bot_succeeds_with_buyer_auth() {
+        let h = setup();
+        let seller = Address::generate(&h.env);
+        let buyer = Address::generate(&h.env);
+        let price = 100_0000000_i128;
+        h.token.mint(&buyer, &price);
+        let bot_id = h.bot.mint_basic(&seller);
+        let listing_id = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address);
+
+        // `buy_bot` pays the seller and the admin fee via cross-contract
+        // calls into `token.transfer(buyer, ..., ...)`, which itself calls
+        // `buyer.require_auth()` — so the buyer's authorization for the root
+        // `buy_bot` invocation must also cover both payment sub-invocations.
+        // (The bot transfer from the marketplace to the buyer is
+        // self-authorized by the marketplace contract and needs no mock.)
+        let fee = price * 25 / 1000;
+        let seller_payment = price - fee;
+        h.env.mock_auths(&[MockAuth {
+            address: &buyer,
+            invoke: &MockAuthInvoke {
+                contract: &h.mkt.address,
+                fn_name: "buy_bot",
+                args: (buyer.clone(), listing_id).into_val(&h.env),
+                sub_invokes: &[
+                    MockAuthInvoke {
+                        contract: &h.token.address,
+                        fn_name: "transfer",
+                        args: (buyer.clone(), seller.clone(), seller_payment).into_val(&h.env),
+                        sub_invokes: &[],
+                    },
+                    MockAuthInvoke {
+                        contract: &h.token.address,
+                        fn_name: "transfer",
+                        args: (buyer.clone(), h.admin.clone(), fee).into_val(&h.env),
+                        sub_invokes: &[],
+                    },
+                ],
+            },
+        }]);
+        let result = h.mkt.try_buy_bot(&buyer, &listing_id);
+        assert!(result.is_ok());
+    }
+}

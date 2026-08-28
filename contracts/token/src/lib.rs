@@ -1460,3 +1460,285 @@ mod test {
     }
 }
 
+// ── Issue #543: explicit authorization tests ──────────────────────────────
+//
+// The module above uses `mock_all_auths()`, which makes every
+// `require_auth()` call succeed unconditionally and therefore cannot catch a
+// missing or incorrect auth check. Each test here exercises one
+// `require_auth()` call site directly: the call must fail when the required
+// signer has not authorized it, and succeed when that signer's authorization
+// is explicitly mocked for exactly that invocation.
+#[cfg(test)]
+mod auth_tests {
+    use super::*;
+    use soroban_sdk::testutils::{Address as _, MockAuth, MockAuthInvoke};
+    use soroban_sdk::{Env, IntoVal, String};
+
+    struct Ctx {
+        env: Env,
+        id: Address,
+        client: AMTTokenClient<'static>,
+        admin: Address,
+    }
+
+    fn setup() -> Ctx {
+        let env = Env::default();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let admin = Address::generate(&env);
+
+        env.mock_all_auths();
+        client.initialize(
+            &admin,
+            &7u32,
+            &String::from_str(&env, "AutoMint Token"),
+            &String::from_str(&env, "AMT"),
+        );
+
+        Ctx {
+            env,
+            id,
+            client,
+            admin,
+        }
+    }
+
+    #[test]
+    fn test_initialize_fails_without_admin_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let admin = Address::generate(&env);
+
+        let result = client.try_initialize(
+            &admin,
+            &7u32,
+            &String::from_str(&env, "AutoMint Token"),
+            &String::from_str(&env, "AMT"),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_initialize_succeeds_with_admin_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        let name = String::from_str(&env, "AutoMint Token");
+        let symbol = String::from_str(&env, "AMT");
+
+        env.mock_auths(&[MockAuth {
+            address: &admin,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "initialize",
+                args: (admin.clone(), 7u32, name.clone(), symbol.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_initialize(&admin, &7u32, &name, &symbol);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_approve_fails_without_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let spender = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx
+            .client
+            .try_approve(&alice, &spender, &100_i128, &1000_u32);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_approve_succeeds_with_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let spender = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &alice,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "approve",
+                args: (alice.clone(), spender.clone(), 100_i128, 1000_u32).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx
+            .client
+            .try_approve(&alice, &spender, &100_i128, &1000_u32);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_transfer_fails_without_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let bob = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx.client.try_transfer(&alice, &bob, &100_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_transfer_succeeds_with_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let bob = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &alice,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "transfer",
+                args: (alice.clone(), bob.clone(), 100_i128).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx.client.try_transfer(&alice, &bob, &100_i128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_transfer_from_fails_without_spender_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let spender = Address::generate(&ctx.env);
+        let bob = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+        ctx.client
+            .approve(&alice, &spender, &500_i128, &1000_u32);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx
+            .client
+            .try_transfer_from(&spender, &alice, &bob, &100_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_transfer_from_succeeds_with_spender_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let spender = Address::generate(&ctx.env);
+        let bob = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+        ctx.client
+            .approve(&alice, &spender, &500_i128, &1000_u32);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &spender,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "transfer_from",
+                args: (spender.clone(), alice.clone(), bob.clone(), 100_i128).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx
+            .client
+            .try_transfer_from(&spender, &alice, &bob, &100_i128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_burn_fails_without_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx.client.try_burn(&alice, &100_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_burn_succeeds_with_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &alice,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "burn",
+                args: (alice.clone(), 100_i128).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx.client.try_burn(&alice, &100_i128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_mint_fails_without_admin_auth() {
+        let ctx = setup();
+        let user = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx.client.try_mint(&user, &100_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mint_succeeds_with_admin_auth() {
+        let ctx = setup();
+        let user = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &ctx.admin,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "mint",
+                args: (user.clone(), 100_i128).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx.client.try_mint(&user, &100_i128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_set_admin_fails_without_current_admin_auth() {
+        let ctx = setup();
+        let new_admin = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx.client.try_set_admin(&new_admin);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_set_admin_succeeds_with_current_admin_auth() {
+        let ctx = setup();
+        let new_admin = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &ctx.admin,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "set_admin",
+                args: (new_admin.clone(),).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx.client.try_set_admin(&new_admin);
+        assert!(result.is_ok());
+    }
+}
+

@@ -1050,3 +1050,131 @@ mod test {
         assert_eq!(profile.total_points, 10);
     }
 }
+
+// ── Issue #543: explicit authorization tests ──────────────────────────────
+//
+// The module above uses `mock_all_auths()`, which makes every
+// `require_auth()` call succeed unconditionally and therefore cannot catch a
+// missing or incorrect auth check. Each test here exercises one
+// `require_auth()` call site directly: the call must fail when the required
+// signer has not authorized it, and succeed when that signer's authorization
+// is explicitly mocked for exactly that invocation.
+#[cfg(test)]
+mod auth_tests {
+    use super::*;
+    use soroban_sdk::testutils::{Address as _, MockAuth, MockAuthInvoke};
+    use soroban_sdk::{Env, IntoVal, String};
+
+    #[test]
+    fn test_initialize_fails_without_admin_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, RegistryContract);
+        let client = RegistryContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+
+        let result = client.try_initialize(&admin);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_initialize_succeeds_with_admin_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, RegistryContract);
+        let client = RegistryContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+
+        env.mock_auths(&[MockAuth {
+            address: &admin,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "initialize",
+                args: (admin.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_initialize(&admin);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_register_fails_without_user_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, RegistryContract);
+        let client = RegistryContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin);
+
+        let user = Address::generate(&env);
+        let username = String::from_str(&env, "alice");
+        // No authorizations mocked for the upcoming call — `user` has not
+        // authorized `register`, so it must fail.
+        env.mock_auths(&[]);
+        let result = client.try_register(&user, &username);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_register_succeeds_with_user_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, RegistryContract);
+        let client = RegistryContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin);
+
+        let user = Address::generate(&env);
+        let username = String::from_str(&env, "alice");
+        env.mock_auths(&[MockAuth {
+            address: &user,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "register",
+                args: (user.clone(), username.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_register(&user, &username);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_decrement_bot_count_fails_without_user_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, RegistryContract);
+        let client = RegistryContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin);
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "bob"));
+
+        env.mock_auths(&[]);
+        let result = client.try_decrement_bot_count(&user);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_decrement_bot_count_succeeds_with_user_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, RegistryContract);
+        let client = RegistryContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin);
+        let user = Address::generate(&env);
+        client.register(&user, &String::from_str(&env, "bob"));
+
+        env.mock_auths(&[MockAuth {
+            address: &user,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "decrement_bot_count",
+                args: (user.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_decrement_bot_count(&user);
+        assert!(result.is_ok());
+    }
+}
