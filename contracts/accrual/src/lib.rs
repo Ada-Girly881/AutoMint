@@ -238,12 +238,8 @@ impl AccrualContract {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, testutils::Ledger, Env, String};
-
-    fn register_user(env: &Env, registry: &Address, user: &Address, name: &str) {
-        let reg_client = automint_registry::RegistryContractClient::new(env, registry);
-        let _ = reg_client.register(user, &String::from_str(env, name));
-    }
+    use automint_test_utils::{deploy_all, register_user};
+    use soroban_sdk::{testutils::Address as _, testutils::Ledger, Env};
 
     fn setup() -> (
         Env,
@@ -252,27 +248,15 @@ mod test {
         Address,
         AccrualContractClient<'static>,
     ) {
-        let env = Env::default();
-        env.mock_all_auths();
-        let id = env.register_contract(None, AccrualContract);
-        let client = AccrualContractClient::new(&env, &id);
-        let admin = Address::generate(&env);
-
-        let registry_id = env.register_contract(None, automint_registry::RegistryContract);
-        let reg_client = automint_registry::RegistryContractClient::new(&env, &registry_id);
-        reg_client.initialize(&admin);
-
-        let token_id = env.register_contract(None, automint_token::AMTToken);
-        let token_client = automint_token::AMTTokenClient::new(&env, &token_id);
-        token_client.initialize(
-            &admin,
-            &7u32,
-            &String::from_str(&env, "AutoMint Token"),
-            &String::from_str(&env, "AMT"),
-        );
-
-        client.initialize(&admin, &100_u64);
-        (env, admin, registry_id, token_id, client)
+        let deployment = deploy_all(Env::default());
+        let client = AccrualContractClient::new(&deployment.env, &deployment.accrual_id);
+        (
+            deployment.env,
+            deployment.admin,
+            deployment.registry_id,
+            deployment.token_id,
+            client,
+        )
     }
 
     #[test]
@@ -284,7 +268,7 @@ mod test {
 
     #[test]
     fn test_double_initialize_fails() {
-        let (env, _admin, _registry, _token, client) = setup();
+        let (_env, _admin, _registry, _token, client) = setup();
         assert!(client.try_initialize(&_admin, &100_u64).is_err());
     }
 

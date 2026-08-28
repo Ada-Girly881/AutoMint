@@ -6,6 +6,7 @@ members = [
     "contracts/accrual",
     "contracts/marketplace",
     "contracts/token",
+    "contracts/test-utils",
 ]
 
 [workspace.dependencies]

@@ -1,47 +1,31 @@
 #![cfg(test)]
 use super::*;
-use automint_bot_nft::{BotNFTContract, BotNFTContractClient};
-use automint_registry::{RegistryContract, RegistryContractClient};
-use automint_token::{AMTToken, AMTTokenClient};
-use soroban_sdk::{testutils::Address as _, Env, String};
+use automint_bot_nft::BotNFTContractClient;
+use automint_registry::RegistryContractClient;
+use automint_test_utils::{deploy_all, deploy_bot_nft_with_registry, register_user};
+use automint_token::AMTTokenClient;
+use soroban_sdk::{testutils::Address as _, Env};
 
 struct Harness<'a> {
     env: Env,
     admin: Address,
+    registry: RegistryContractClient<'a>,
     bot: BotNFTContractClient<'a>,
     token: AMTTokenClient<'a>,
     mkt: MarketplaceContractClient<'a>,
 }
 
 fn setup() -> Harness<'static> {
-    let env = Env::default();
-    env.mock_all_auths();
-    let admin = Address::generate(&env);
-
-    let registry_id = env.register_contract(None, RegistryContract);
-    let registry = RegistryContractClient::new(&env, &registry_id);
-    registry.initialize(&admin);
-
-    let bot_id = env.register_contract(None, BotNFTContract);
-    let bot = BotNFTContractClient::new(&env, &bot_id);
-    bot.initialize(&admin, &registry_id);
-
-    let token_id = env.register_contract(None, AMTToken);
-    let token = AMTTokenClient::new(&env, &token_id);
-    token.initialize(
-        &admin,
-        &7u32,
-        &String::from_str(&env, "AutoMint Token"),
-        &String::from_str(&env, "AMT"),
-    );
-
-    let mkt_id = env.register_contract(None, MarketplaceContract);
-    let mkt = MarketplaceContractClient::new(&env, &mkt_id);
-    mkt.initialize(&admin, &bot_id, &250u32);
+    let deployment = deploy_all(Env::default());
+    let registry = RegistryContractClient::new(&deployment.env, &deployment.registry_id);
+    let bot = BotNFTContractClient::new(&deployment.env, &deployment.bot_nft_id);
+    let token = AMTTokenClient::new(&deployment.env, &deployment.token_id);
+    let mkt = MarketplaceContractClient::new(&deployment.env, &deployment.marketplace_id);
 
     Harness {
-        env,
-        admin,
+        env: deployment.env,
+        admin: deployment.admin,
+        registry,
         bot,
         token,
         mkt,
@@ -202,7 +186,10 @@ fn test_buy_bot_pays_seller_minus_fee_and_transfers_bot() {
 
     // 2.5% fee = 25_0000000, seller gets 975_0000000
     let fee = price * 25 / 1000;
-    assert_eq!(h.token.balance(&seller), seller_balance_before + price - fee);
+    assert_eq!(
+        h.token.balance(&seller),
+        seller_balance_before + price - fee
+    );
     assert_eq!(h.token.balance(&h.admin), admin_balance_before + fee);
     assert_eq!(h.token.balance(&buyer), 0);
 
@@ -249,9 +236,7 @@ fn test_buy_inactive_listing_fails() {
 
     h.token.mint(&buyer, &(price * 2));
     let bot_id = h.bot.mint_basic(&seller);
-    let listing_id = h
-        .mkt
-        .list_bot(&seller, &bot_id, &price, &h.token.address);
+    let listing_id = h.mkt.list_bot(&seller, &bot_id, &price, &h.token.address);
 
     // Cancel the listing first
     h.mkt.cancel_listing(&seller, &listing_id);
@@ -315,37 +300,25 @@ fn test_cancel_listing_by_non_seller_fails() {
 #[test]
 fn test_bot_nft_registry_integration_mint_increments_bot_count() {
     let h = setup();
-    let registry = RegistryContractClient::new(&h.env, &Address::from_contract_id(&h.env, &h.bot.address)); // Placeholder; use correct registry address
-
-    // Create a new registry to use with this test
-    let registry_id = h.env.register_contract(None, RegistryContract);
-    let registry = RegistryContractClient::new(&h.env, &registry_id);
-    let admin = Address::generate(&h.env);
-    registry.initialize(&admin);
-
-    // Create a new bot_nft contract pointing to this registry
-    let bot_id = h.env.register_contract(None, BotNFTContract);
-    let bot = BotNFTContractClient::new(&h.env, &bot_id);
-    bot.initialize(&admin, &registry_id);
 
     // Register a user in the registry
     let user = Address::generate(&h.env);
-    registry.register(&user, &String::from_str(&h.env, "testuser"));
+    register_user(&h.env, &h.registry.address, &user, "testuser");
 
     // Verify initial bot_count is 0
-    let profile_before = registry.get_user(&user);
+    let profile_before = h.registry.get_user(&user);
     assert_eq!(profile_before.bot_count, 0);
 
     // Mint a bot for the user
-    bot.mint_basic(&user);
+    h.bot.mint_basic(&user);
 
     // Verify bot_count was incremented to 1
-    let profile_after = registry.get_user(&user);
+    let profile_after = h.registry.get_user(&user);
     assert_eq!(profile_after.bot_count, 1);
 
     // Mint another bot and verify increment
-    bot.mint_basic(&user);
-    let profile_after2 = registry.get_user(&user);
+    h.bot.mint_basic(&user);
+    let profile_after2 = h.registry.get_user(&user);
     assert_eq!(profile_after2.bot_count, 2);
 }
 
@@ -356,12 +329,9 @@ fn test_bot_nft_mint_succeeds_even_if_registry_not_initialized() {
     let h = setup();
 
     // Create a new bot_nft without a valid registry
-    let bot_id = h.env.register_contract(None, BotNFTContract);
-    let bot = BotNFTContractClient::new(&h.env, &bot_id);
     let admin = Address::generate(&h.env);
     let bad_registry = Address::generate(&h.env); // Not a real contract
-
-    bot.initialize(&admin, &bad_registry);
+    let (_bot_id, bot) = deploy_bot_nft_with_registry(&h.env, &admin, &bad_registry);
 
     let owner = Address::generate(&h.env);
 
@@ -452,7 +422,9 @@ fn test_bot_nft_marketplace_integration_escrowed_bot_cannot_be_listed_again() {
     assert_eq!(h.bot.get_user_bots(&seller).len(), 0);
 
     // Attempt to list the same bot again should fail (seller is no longer owner)
-    let result = h.mkt.try_list_bot(&seller, &bot_id, &100_0000000_i128, &h.token.address);
+    let result = h
+        .mkt
+        .try_list_bot(&seller, &bot_id, &100_0000000_i128, &h.token.address);
     assert_eq!(result, Err(Ok(MarketplaceError::BotTransferFailed)));
 }
 
@@ -466,71 +438,59 @@ fn test_marketplace_token_registry_integration_full_sale_with_updates() {
     let seller = Address::generate(&h.env);
     let buyer = Address::generate(&h.env);
     let price = 1000_0000000_i128;
-    let fee_bps = 250; // 2.5%
     let fee = (price * 25) / 1000;
     let seller_receives = price - fee;
 
     // Register both users in registry
-    let registry = RegistryContractClient::new(&h.env, &Address::generate(&h.env)); // Mock registry address
-    let registry_id = h.env.register_contract(None, RegistryContract);
-    let registry = RegistryContractClient::new(&h.env, &registry_id);
-    let admin = Address::generate(&h.env);
-    registry.initialize(&admin);
-
-    registry.register(&seller, &String::from_str(&h.env, "seller"));
-    registry.register(&buyer, &String::from_str(&h.env, "buyer"));
-
-    // Create bot_nft pointing to registry
-    let bot_id = h.env.register_contract(None, BotNFTContract);
-    let bot = BotNFTContractClient::new(&h.env, &bot_id);
-    bot.initialize(&admin, &registry_id);
-
-    // Create marketplace pointing to bot_nft
-    let mkt_id = h.env.register_contract(None, MarketplaceContract);
-    let mkt = MarketplaceContractClient::new(&h.env, &mkt_id);
-    mkt.initialize(&admin, &bot_id, &fee_bps);
+    register_user(&h.env, &h.registry.address, &seller, "seller");
+    register_user(&h.env, &h.registry.address, &buyer, "buyer");
 
     // Fund buyer with tokens
     h.token.mint(&buyer, &(price * 2));
 
     // Seller mints a bot via bot_nft
-    let bot_nft_id = bot.mint_basic(&seller);
+    let bot_nft_id = h.bot.mint_basic(&seller);
 
     // Verify registry bot_count incremented for seller
-    assert_eq!(registry.get_user(&seller).bot_count, 1);
+    assert_eq!(h.registry.get_user(&seller).bot_count, 1);
 
     // Seller lists the bot at price on marketplace
-    let listing_id = mkt.list_bot(&seller, &bot_nft_id, &price, &h.token.address);
+    let listing_id = h
+        .mkt
+        .list_bot(&seller, &bot_nft_id, &price, &h.token.address);
 
     // Verify bot is escrowed
-    assert_eq!(bot.get_bot(&bot_nft_id).owner, mkt.address);
+    assert_eq!(h.bot.get_bot(&bot_nft_id).owner, h.mkt.address);
 
     // Record balances before purchase
     let seller_balance_before = h.token.balance(&seller);
     let buyer_balance_before = h.token.balance(&buyer);
-    let admin_balance_before = h.token.balance(&admin);
+    let admin_balance_before = h.token.balance(&h.admin);
 
     // Buyer purchases the bot
-    mkt.buy_bot(&buyer, &listing_id);
+    h.mkt.buy_bot(&buyer, &listing_id);
 
     // Verify token transfers: buyer pays full price, seller gets (price - fee), admin gets fee
     assert_eq!(h.token.balance(&buyer), buyer_balance_before - price);
-    assert_eq!(h.token.balance(&seller), seller_balance_before + seller_receives);
-    assert_eq!(h.token.balance(&admin), admin_balance_before + fee);
+    assert_eq!(
+        h.token.balance(&seller),
+        seller_balance_before + seller_receives
+    );
+    assert_eq!(h.token.balance(&h.admin), admin_balance_before + fee);
 
     // Verify bot ownership transferred to buyer
-    assert_eq!(bot.get_bot(&bot_nft_id).owner, buyer);
-    assert_eq!(bot.get_user_bots(&buyer).len(), 1);
-    assert_eq!(bot.get_user_bots(&seller).len(), 0);
+    assert_eq!(h.bot.get_bot(&bot_nft_id).owner, buyer);
+    assert_eq!(h.bot.get_user_bots(&buyer).len(), 1);
+    assert_eq!(h.bot.get_user_bots(&seller).len(), 0);
 
     // Verify listing is inactive
-    assert!(!mkt.get_listing(&listing_id).active);
+    assert!(!h.mkt.get_listing(&listing_id).active);
 
     // Verify seller bot_count remains 1 (mint incremented, transfer doesn't change bot_count)
-    assert_eq!(registry.get_user(&seller).bot_count, 1);
+    assert_eq!(h.registry.get_user(&seller).bot_count, 1);
 
     // Verify buyer bot_count remains 0 (transfer from marketplace to buyer doesn't increment)
-    assert_eq!(registry.get_user(&buyer).bot_count, 0);
+    assert_eq!(h.registry.get_user(&buyer).bot_count, 0);
 }
 
 /// Test that multiple sequential purchases (multiple bots) work correctly.

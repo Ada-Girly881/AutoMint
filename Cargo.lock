@@ -47,6 +47,7 @@ version = "0.1.0"
 dependencies = [
  "automint-bot-nft",
  "automint-registry",
+ "automint-test-utils",
  "automint-token",
  "soroban-sdk",
 ]
@@ -56,6 +57,7 @@ name = "automint-bot-nft"
 version = "0.1.0"
 dependencies = [
  "automint-registry",
+ "automint-test-utils",
  "automint-token",
  "soroban-sdk",
 ]
@@ -66,6 +68,7 @@ version = "0.1.0"
 dependencies = [
  "automint-bot-nft",
  "automint-registry",
+ "automint-test-utils",
  "automint-token",
  "soroban-sdk",
 ]
@@ -74,6 +77,18 @@ dependencies = [
 name = "automint-registry"
 version = "0.1.0"
 dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
+name = "automint-test-utils"
+version = "0.1.0"
+dependencies = [
+ "automint-accrual",
+ "automint-bot-nft",
+ "automint-marketplace",
+ "automint-registry",
+ "automint-token",
  "soroban-sdk",
 ]
 

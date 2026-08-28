@@ -317,12 +317,8 @@ impl BotNFTContract {
 #[cfg(test)]
 mod test {
     use super::*;
+    use automint_test_utils::{deploy_all, register_user};
     use soroban_sdk::{testutils::Address as _, Env, String};
-
-    fn register_user(env: &Env, registry: &Address, user: &Address, name: &str) {
-        let reg_client = automint_registry::RegistryContractClient::new(env, registry);
-        let _ = reg_client.register(user, &String::from_str(env, name));
-    }
 
     fn setup() -> (
         Env,
@@ -331,27 +327,15 @@ mod test {
         Address,
         BotNFTContractClient<'static>,
     ) {
-        let env = Env::default();
-        env.mock_all_auths();
-        let id = env.register_contract(None, BotNFTContract);
-        let client = BotNFTContractClient::new(&env, &id);
-        let admin = Address::generate(&env);
-
-        let registry_id = env.register_contract(None, automint_registry::RegistryContract);
-        let reg_client = automint_registry::RegistryContractClient::new(&env, &registry_id);
-        reg_client.initialize(&admin);
-
-        let token_id = env.register_contract(None, automint_token::AMTToken);
-        let token_client = automint_token::AMTTokenClient::new(&env, &token_id);
-        token_client.initialize(
-            &admin,
-            &7u32,
-            &String::from_str(&env, "Test Token"),
-            &String::from_str(&env, "TST"),
-        );
-
-        client.initialize(&admin, &registry_id);
-        (env, admin, registry_id, token_id, client)
+        let deployment = deploy_all(Env::default());
+        let client = BotNFTContractClient::new(&deployment.env, &deployment.bot_nft_id);
+        (
+            deployment.env,
+            deployment.admin,
+            deployment.registry_id,
+            deployment.token_id,
+            client,
+        )
     }
 
     fn fund_user(env: &Env, token: &Address, user: &Address, amount: i128) {
@@ -567,7 +551,7 @@ mod test {
 
     #[test]
     fn test_get_user_total_rate_empty_user() {
-        let (env, _admin, registry, _token, client) = setup();
+        let (env, _admin, _registry, _token, client) = setup();
         let user = Address::generate(&env);
         assert_eq!(client.get_user_total_rate(&user), 0);
     }
@@ -600,7 +584,7 @@ mod test {
 
     #[test]
     fn test_admin_returns_initialized_admin() {
-        let (env, admin, _registry, _token, client) = setup();
+        let (_env, admin, _registry, _token, client) = setup();
         assert_eq!(client.admin(), admin);
     }
 
@@ -678,14 +662,14 @@ mod test {
 
     #[test]
     fn test_get_bot_nonexistent_id_fails() {
-        let (env, _admin, _registry, _token, client) = setup();
+        let (_env, _admin, _registry, _token, client) = setup();
         let result = client.try_get_bot(&999);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_get_bot_zero_id_fails() {
-        let (env, _admin, _registry, _token, client) = setup();
+        let (_env, _admin, _registry, _token, client) = setup();
         let result = client.try_get_bot(&0);
         assert!(result.is_err());
     }
@@ -810,4 +794,3 @@ mod test {
         assert_eq!(diamond.2, 25000_0000000);
     }
 }
-

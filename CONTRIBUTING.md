@@ -13,13 +13,15 @@ This branch is being rebuilt piece by piece through GitHub Issues. Each issue is
    git checkout -b <issue-number>-<short-description>
    ```
 4. Implement **only** what the issue describes. Leave the `// TODO` markers in any file your issue doesn't cover.
-5. Run the relevant test suite locally:
+5. For any issue that changes a cross-contract contract, add or update an Architecture Decision Record in `docs/adr/`. Start from `docs/adr/0000-template.md` and make sure the ADR states context, decision, alternatives considered, and consequences.
+6. Run the relevant test suite locally:
    ```bash
    cargo test --workspace          # contract issues
    cd frontend && npm test          # frontend issues
    npx tsc --noEmit                 # frontend issues
+   npm run lhci                     # frontend performance issues
    ```
-6. Open a PR **targeting `testnet-implementation`**, not `main`. Title it after the issue, and include `Closes #<issue-number>` in the description.
+7. Open a PR **targeting `testnet-implementation`**, not `main`. Title it after the issue, and include `Closes #<issue-number>` in the description.
 
 ## Code style
 
