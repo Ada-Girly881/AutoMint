@@ -216,7 +216,17 @@ impl AMTToken {
         env.storage()
             .persistent()
             .set(&DataKey::Balance(from.clone()), &(balance - amount));
-        
+        // #544: as with do_transfer, refresh the balance entry's TTL on
+        // every write instead of only on mint.
+        env.storage().persistent().extend_ttl(
+            &DataKey::Balance(from.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
+
         env.events().publish((symbol_short!("burn"), from), amount);
         Ok(())
     }
@@ -351,11 +361,26 @@ impl AMTToken {
         env.storage()
             .persistent()
             .set(&DataKey::Balance(to.clone()), &new_to);
+        // #544: the sender's balance entry is written on every transfer
+        // just like the recipient's, but its TTL was never refreshed here —
+        // only the recipient's was. A wallet that only ever sends (never
+        // receives) could have its balance entry silently archive even
+        // while actively transacting. Bump both sides.
+        env.storage().persistent().extend_ttl(
+            &DataKey::Balance(from.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
         env.storage().persistent().extend_ttl(
             &DataKey::Balance(to.clone()),
             LEDGER_THRESHOLD,
             LEDGER_BUMP,
         );
+        // Keep the contract instance itself alive on write activity too —
+        // mirrors `registry::register` and the bot_nft `transfer` fix.
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         env.events().publish(
             (symbol_short!("transfer"), from.clone(), to.clone()),
             amount,
@@ -397,6 +422,9 @@ impl AMTToken {
         Ok(())
     }
 }
+
+#[cfg(test)]
+extern crate std;
 
 #[cfg(test)]
 mod test {
@@ -538,7 +566,7 @@ mod test {
         let bob = Address::generate(&env);
         client.mint(&alice, &100_i128);
         let result = client.try_transfer(&alice, &bob, &200_i128);
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::InsufficientBalance)));
     }
 
     #[test]
@@ -550,7 +578,7 @@ mod test {
             &String::from_str(&env, "AutoMint Token"),
             &String::from_str(&env, "AMT"),
         );
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::AlreadyInitialized)));
     }
 
     #[test]
@@ -558,7 +586,8 @@ mod test {
         let (env, _admin, client) = setup();
         let user = Address::generate(&env);
         client.mint(&user, &100_i128);
-        assert!(client.try_burn(&user, &200_i128).is_err());
+        let result = client.try_burn(&user, &200_i128);
+        assert_eq!(result, Err(Ok(TokenError::InsufficientBalance)));
     }
 
     // --- set_admin: happy path ---
@@ -818,7 +847,7 @@ mod test {
         assert_eq!(result, Err(Ok(TokenError::AllowanceExpired)));
     }
 
-    // #81: No allowance at all (zero by default) → AllowanceExpired (expiration_ledger == 0 < sequence)
+    // #81: No allowance at all (zero by default) → InsufficientAllowance (amount 0 < requested)
     #[test]
     fn test_transfer_from_no_allowance_fails() {
         let (env, _admin, client) = setup();
@@ -826,9 +855,9 @@ mod test {
         let spender = Address::generate(&env);
         let bob = Address::generate(&env);
         client.mint(&alice, &1000_i128);
-        // No approve call — default allowance value has expiration_ledger == 0
+        // No approve call — default allowance value has amount == 0
         let result = client.try_transfer_from(&spender, &alice, &bob, &100_i128);
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::InsufficientAllowance)));
     }
 
     // #81: Negative amount rejected before allowance is checked (no allowance needed)
@@ -878,7 +907,7 @@ mod test {
         let id = env.register_contract(None, AMTToken);
         let client = AMTTokenClient::new(&env, &id);
         let result = client.try_symbol();
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::NotInitialized)));
     }
 
     #[test]
@@ -895,7 +924,7 @@ mod test {
         let id = env.register_contract(None, AMTToken);
         let client = AMTTokenClient::new(&env, &id);
         let result = client.try_name();
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::NotInitialized)));
     }
 
     #[test]
@@ -913,7 +942,7 @@ mod test {
         let alice = Address::generate(&env);
         let result =
             client.try_approve(&alice, &alice, &100_i128, &(env.ledger().sequence() + 1000));
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::Unauthorized)));
     }
 
     #[test]
@@ -925,7 +954,7 @@ mod test {
         let alice = Address::generate(&env);
         let result =
             client.try_approve(&alice, &alice, &100_i128, &(env.ledger().sequence() + 1000));
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::NotInitialized)));
     }
 
     #[test]
@@ -949,7 +978,7 @@ mod test {
         client.mint(&alice, &1000_i128);
         
         let result = client.try_burn(&alice, &-100_i128);
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::NegativeAmount)));
     }
 
     #[test]
@@ -968,7 +997,7 @@ mod test {
         let alice = Address::generate(&env);
 
         let result = client.try_burn(&alice, &100_i128);
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::InsufficientBalance)));
     }
 
     // --- Issue #76: initialize validation tests ---
@@ -986,7 +1015,6 @@ mod test {
             &String::from_str(&env, "AutoMint Token"),
             &String::from_str(&env, "AMT"),
         );
-        assert!(result.is_err());
         assert_eq!(result, Err(Ok(TokenError::NegativeAmount)));
     }
 
@@ -1005,7 +1033,7 @@ mod test {
         let id = env.register_contract(None, AMTToken);
         let client = AMTTokenClient::new(&env, &id);
         let result = client.try_admin();
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::NotInitialized)));
     }
 
     // --- Issue #86: decimals() Result validation tests ---
@@ -1023,7 +1051,7 @@ mod test {
         let id = env.register_contract(None, AMTToken);
         let client = AMTTokenClient::new(&env, &id);
         let result = client.try_decimals();
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(TokenError::NotInitialized)));
     }
 
     // --- Issue #77: allowance() edge case tests ---
@@ -1341,6 +1369,376 @@ mod test {
         assert_eq!(client.allowance(&alice, &spender), 300_i128);
         assert_eq!(client.balance(&alice), 800_i128);
         assert_eq!(client.balance(&bob), 200_i128);
+    }
+
+    // --- Issue #544: storage TTL / archival coverage ---
+    //
+    // Balance entries are persistent storage bumped via
+    // `extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP)`. These tests simulate
+    // ledger advancement with `automint_testutils::advance_ledger` to
+    // exercise that TTL/archival behaviour directly, including the #544
+    // fixes above (do_transfer previously only renewed the *recipient*
+    // balance's TTL, never the sender's; burn never renewed it at all).
+
+    // Control case: a balance minted well within the TTL window is still
+    // readable.
+    #[test]
+    fn test_balance_survives_before_ttl_expiry() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP / 2);
+
+        assert_eq!(client.balance(&alice), 1000_i128);
+    }
+
+    // A balance entry whose TTL is never refreshed becomes archived once
+    // the ledger sequence passes its live_until_ledger_seq. As in the other
+    // contracts, the whole contract instance shares the same TTL bump
+    // window here, so accessing anything past that point is rejected with
+    // a hard panic caught via `catch_unwind`.
+    #[test]
+    fn test_balance_archived_after_ttl_expiry() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+
+        automint_testutils::advance_past_ttl(&env, LEDGER_BUMP);
+
+        let outcome =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| client.balance(&alice)));
+        assert!(outcome.is_err(), "expected archived entry access to fail");
+    }
+
+    // #544 fix verification: `do_transfer` now renews the *sender's*
+    // balance TTL too, not just the recipient's. Advancing to just before
+    // the original expiry, transferring funds away from alice (which,
+    // pre-fix, would only have renewed bob's TTL), then advancing past the
+    // original expiry must still leave alice's (now-empty) balance entry
+    // readable.
+    //
+    // Verified manually that this test exercises the renewal (not just Env
+    // defaults) by temporarily removing the sender-side `extend_ttl` call
+    // added to `do_transfer` above: with it removed, this test fails with
+    // an archived-entry panic at the final `balance(&alice)` call.
+    #[test]
+    fn test_transfer_extends_sender_ttl_restores_access_near_expiry() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP - 1);
+        client.transfer(&alice, &bob, &100_i128);
+
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP);
+
+        assert_eq!(client.balance(&alice), 900_i128);
+        assert_eq!(client.balance(&bob), 100_i128);
+    }
+
+    // #544 fix verification: `burn` now renews the balance entry's TTL,
+    // matching every other balance-mutating path.
+    //
+    // Verified manually that this test exercises the renewal by temporarily
+    // removing the `extend_ttl` call added to `burn` above: with it
+    // removed, this test fails with an archived-entry panic at the final
+    // `balance(&alice)` call.
+    #[test]
+    fn test_burn_extends_ttl_restores_access_near_expiry() {
+        let (env, _admin, client) = setup();
+        let alice = Address::generate(&env);
+        client.mint(&alice, &1000_i128);
+
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP - 1);
+        client.burn(&alice, &100_i128);
+
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP);
+
+        assert_eq!(client.balance(&alice), 900_i128);
+    }
+}
+
+// ── Issue #543: explicit authorization tests ──────────────────────────────
+//
+// The module above uses `mock_all_auths()`, which makes every
+// `require_auth()` call succeed unconditionally and therefore cannot catch a
+// missing or incorrect auth check. Each test here exercises one
+// `require_auth()` call site directly: the call must fail when the required
+// signer has not authorized it, and succeed when that signer's authorization
+// is explicitly mocked for exactly that invocation.
+#[cfg(test)]
+mod auth_tests {
+    use super::*;
+    use soroban_sdk::testutils::{Address as _, MockAuth, MockAuthInvoke};
+    use soroban_sdk::{Env, IntoVal, String};
+
+    struct Ctx {
+        env: Env,
+        id: Address,
+        client: AMTTokenClient<'static>,
+        admin: Address,
+    }
+
+    fn setup() -> Ctx {
+        let env = Env::default();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let admin = Address::generate(&env);
+
+        env.mock_all_auths();
+        client.initialize(
+            &admin,
+            &7u32,
+            &String::from_str(&env, "AutoMint Token"),
+            &String::from_str(&env, "AMT"),
+        );
+
+        Ctx {
+            env,
+            id,
+            client,
+            admin,
+        }
+    }
+
+    #[test]
+    fn test_initialize_fails_without_admin_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let admin = Address::generate(&env);
+
+        let result = client.try_initialize(
+            &admin,
+            &7u32,
+            &String::from_str(&env, "AutoMint Token"),
+            &String::from_str(&env, "AMT"),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_initialize_succeeds_with_admin_auth() {
+        let env = Env::default();
+        let id = env.register_contract(None, AMTToken);
+        let client = AMTTokenClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        let name = String::from_str(&env, "AutoMint Token");
+        let symbol = String::from_str(&env, "AMT");
+
+        env.mock_auths(&[MockAuth {
+            address: &admin,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "initialize",
+                args: (admin.clone(), 7u32, name.clone(), symbol.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_initialize(&admin, &7u32, &name, &symbol);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_approve_fails_without_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let spender = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx
+            .client
+            .try_approve(&alice, &spender, &100_i128, &1000_u32);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_approve_succeeds_with_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let spender = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &alice,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "approve",
+                args: (alice.clone(), spender.clone(), 100_i128, 1000_u32).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx
+            .client
+            .try_approve(&alice, &spender, &100_i128, &1000_u32);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_transfer_fails_without_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let bob = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx.client.try_transfer(&alice, &bob, &100_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_transfer_succeeds_with_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let bob = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &alice,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "transfer",
+                args: (alice.clone(), bob.clone(), 100_i128).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx.client.try_transfer(&alice, &bob, &100_i128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_transfer_from_fails_without_spender_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let spender = Address::generate(&ctx.env);
+        let bob = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+        ctx.client
+            .approve(&alice, &spender, &500_i128, &1000_u32);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx
+            .client
+            .try_transfer_from(&spender, &alice, &bob, &100_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_transfer_from_succeeds_with_spender_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        let spender = Address::generate(&ctx.env);
+        let bob = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+        ctx.client
+            .approve(&alice, &spender, &500_i128, &1000_u32);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &spender,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "transfer_from",
+                args: (spender.clone(), alice.clone(), bob.clone(), 100_i128).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx
+            .client
+            .try_transfer_from(&spender, &alice, &bob, &100_i128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_burn_fails_without_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx.client.try_burn(&alice, &100_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_burn_succeeds_with_from_auth() {
+        let ctx = setup();
+        let alice = Address::generate(&ctx.env);
+        ctx.env.mock_all_auths();
+        ctx.client.mint(&alice, &1000_i128);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &alice,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "burn",
+                args: (alice.clone(), 100_i128).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx.client.try_burn(&alice, &100_i128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_mint_fails_without_admin_auth() {
+        let ctx = setup();
+        let user = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx.client.try_mint(&user, &100_i128);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mint_succeeds_with_admin_auth() {
+        let ctx = setup();
+        let user = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &ctx.admin,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "mint",
+                args: (user.clone(), 100_i128).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx.client.try_mint(&user, &100_i128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_set_admin_fails_without_current_admin_auth() {
+        let ctx = setup();
+        let new_admin = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[]);
+        let result = ctx.client.try_set_admin(&new_admin);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_set_admin_succeeds_with_current_admin_auth() {
+        let ctx = setup();
+        let new_admin = Address::generate(&ctx.env);
+
+        ctx.env.mock_auths(&[MockAuth {
+            address: &ctx.admin,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.id,
+                fn_name: "set_admin",
+                args: (new_admin.clone(),).into_val(&ctx.env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = ctx.client.try_set_admin(&new_admin);
+        assert!(result.is_ok());
     }
 }
 

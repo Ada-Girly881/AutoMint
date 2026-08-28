@@ -17,4 +17,4 @@ automint-registry = { path = "../registry" }
 soroban-sdk = { version = "21", features = ["testutils"] }
 automint-registry = { path = "../registry", features = ["testutils"] }
 automint-token = { path = "../token", features = ["testutils"] }
-automint-test-utils = { path = "../test-utils" }
+automint-testutils = { path = "../testutils" }

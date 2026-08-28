@@ -23,6 +23,11 @@ This branch is being rebuilt piece by piece through GitHub Issues. Each issue is
    ```
 7. Open a PR **targeting `testnet-implementation`**, not `main`. Title it after the issue, and include `Closes #<issue-number>` in the description.
 
+CI runs `cargo fmt --check`, `cargo clippy -- -D warnings`, `next lint`, and `tsc --noEmit` on every PR (see `.github/workflows/ci.yml`). To catch violations before pushing, enable the fast pre-commit hook once per clone:
+```bash
+git config core.hooksPath .githooks
+```
+
 ## Code style
 
 - **Rust**: follow standard `rustfmt` formatting (`cargo fmt`). Contract functions should return `Result<T, Error>` for any fallible operation — no panics on user input.

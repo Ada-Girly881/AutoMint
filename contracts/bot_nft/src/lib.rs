@@ -223,6 +223,21 @@ impl BotNFTContract {
 
         bot.owner = to.clone();
         env.storage().persistent().set(&DataKey::Bot(bot_id), &bot);
+        // #544: `set` alone does not refresh a persistent entry's TTL once
+        // it's past the extend-TTL threshold — without this, a bot that
+        // changes hands close to its expiry ledger (but is never minted
+        // again) could still silently archive out from under its new
+        // owner. Explicitly bump it on every ownership change, matching
+        // every other write path in this contract.
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Bot(bot_id), LEDGER_THRESHOLD, LEDGER_BUMP);
+        // Also keep the contract instance itself alive on write activity —
+        // mirrors `registry::register`, which bumps its own instance TTL on
+        // every write, not just at `initialize`.
+        env.storage()
+            .instance()
+            .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
         Self::remove_bot_from_user(&env, &from, bot_id);
         Self::add_bot_to_user(&env, &to, bot_id);
 
@@ -276,6 +291,16 @@ impl BotNFTContract {
         env.storage()
             .persistent()
             .set(&DataKey::UserBots(user.clone()), &bots);
+        // #544: this entry previously only got the network's default
+        // minimum persistent TTL at write time and was never explicitly
+        // bumped, unlike every other persistent key in this contract — it
+        // could silently archive (taking a user's entire bot list with it)
+        // well before the 7-day retention window implied by LEDGER_BUMP.
+        env.storage().persistent().extend_ttl(
+            &DataKey::UserBots(user.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
     }
 
     fn remove_bot_from_user(env: &Env, user: &Address, bot_id: u64) {
@@ -293,6 +318,12 @@ impl BotNFTContract {
         env.storage()
             .persistent()
             .set(&DataKey::UserBots(user.clone()), &new_bots);
+        // #544: see add_bot_to_user — keep this entry's TTL in step too.
+        env.storage().persistent().extend_ttl(
+            &DataKey::UserBots(user.clone()),
+            LEDGER_THRESHOLD,
+            LEDGER_BUMP,
+        );
     }
 
     pub fn admin(env: Env) -> Result<Address, BotNFTError> {
@@ -315,9 +346,12 @@ impl BotNFTContract {
 }
 
 #[cfg(test)]
+extern crate std;
+
+#[cfg(test)]
 mod test {
     use super::*;
-    use automint_test_utils::{deploy_all, register_user};
+    use automint_testutils::{deploy_all, register_user};
     use soroban_sdk::{testutils::Address as _, Env, String};
 
     fn setup() -> (
@@ -521,7 +555,7 @@ mod test {
 
         let bot_id = client.mint_basic(&alice);
         let result = client.try_transfer(&bot_id, &bob, &charlie);
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(BotNFTError::NotOwner)));
     }
 
     #[test]
@@ -546,7 +580,7 @@ mod test {
         register_user(&env, &registry, &alice, "alice");
 
         let result = client.try_transfer(&999, &alice, &bob);
-        assert!(result.is_err());
+        assert_eq!(result, Err(Ok(BotNFTError::BotNotFound)));
     }
 
     #[test]
@@ -593,7 +627,8 @@ mod test {
         let env = Env::default();
         let id = env.register_contract(None, BotNFTContract);
         let client = BotNFTContractClient::new(&env, &id);
-        assert!(client.try_admin().is_err());
+        let result = client.try_admin();
+        assert_eq!(result, Err(Ok(BotNFTError::NotInitialized)));
     }
 
     #[test]
@@ -664,14 +699,14 @@ mod test {
     fn test_get_bot_nonexistent_id_fails() {
         let (_env, _admin, _registry, _token, client) = setup();
         let result = client.try_get_bot(&999);
-        assert!(result.is_err());
+        assert!(matches!(result, Err(Ok(BotNFTError::BotNotFound))));
     }
 
     #[test]
     fn test_get_bot_zero_id_fails() {
         let (_env, _admin, _registry, _token, client) = setup();
         let result = client.try_get_bot(&0);
-        assert!(result.is_err());
+        assert!(matches!(result, Err(Ok(BotNFTError::BotNotFound))));
     }
 
     #[test]
@@ -705,7 +740,11 @@ mod test {
         let user = Address::generate(&env);
         register_user(&env, &registry, &user, "testuser");
         
-        // User has 0 balance, cannot mint Advanced tier
+        // User has 0 balance, cannot mint Advanced tier. mint_tier() calls the
+        // token contract's `transfer` (not `try_transfer`), which panics on
+        // insufficient balance rather than returning a BotNFTError variant, so
+        // this surfaces as a host-level invocation error rather than a typed
+        // contract error we can match on. Kept as a plain is_err() check.
         let result = client.try_mint_tier(&user, &Tier::Advanced, &token_id);
         assert!(result.is_err());
     }
@@ -792,5 +831,268 @@ mod test {
         assert_eq!(diamond.0, String::from_str(&env, "Diamond Bot"));
         assert_eq!(diamond.1, 500);
         assert_eq!(diamond.2, 25000_0000000);
+    }
+
+    // --- Issue #544: storage TTL / archival coverage ---
+    //
+    // Each BotNFT is persistent storage bumped via
+    // `extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP)` at mint time (and, after
+    // the #544 fix above, on every `transfer`). These tests simulate ledger
+    // advancement with `automint_testutils::advance_ledger` to exercise
+    // that TTL/archival behaviour directly.
+
+    // Control case: a bot minted well within the TTL window is still
+    // readable.
+    #[test]
+    fn test_bot_survives_before_ttl_expiry() {
+        let (env, _admin, registry, _token, client) = setup();
+        let alice = Address::generate(&env);
+        register_user(&env, &registry, &alice, "alice");
+        let bot_id = client.mint_basic(&alice);
+
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP / 2);
+
+        let bot = client.get_bot(&bot_id);
+        assert_eq!(bot.owner, alice);
+    }
+
+    // A bot whose TTL is never refreshed becomes archived once the ledger
+    // sequence passes its live_until_ledger_seq. As in the registry
+    // contract, the whole contract instance shares the same TTL bump here
+    // (set at `initialize`), so an unrefreshed advance past LEDGER_BUMP
+    // archives the instance itself and access is rejected with a hard
+    // panic (matching how a real network would never re-enter the
+    // contract), caught here via `catch_unwind`.
+    #[test]
+    fn test_bot_archived_after_ttl_expiry() {
+        let (env, _admin, registry, _token, client) = setup();
+        let alice = Address::generate(&env);
+        register_user(&env, &registry, &alice, "alice");
+        let bot_id = client.mint_basic(&alice);
+
+        automint_testutils::advance_past_ttl(&env, LEDGER_BUMP);
+
+        let outcome =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| client.get_bot(&bot_id)));
+        assert!(outcome.is_err(), "expected archived entry access to fail");
+    }
+
+    // #544 fix verification: `transfer` now calls `extend_ttl` on both the
+    // bot entry and the contract instance on every ownership change.
+    // Advancing to just before the original expiry, transferring the bot
+    // (which renews both TTLs), then advancing well past the original
+    // expiry ledger must still leave the bot readable under its new owner.
+    //
+    // Verified manually that this test exercises the renewal (not just Env
+    // defaults) by temporarily removing the two `extend_ttl` calls added to
+    // `transfer` above: with them removed, this test fails with an
+    // archived-entry panic at the final `get_bot` call.
+    #[test]
+    fn test_transfer_extend_ttl_restores_access_near_expiry() {
+        let (env, _admin, registry, _token, client) = setup();
+        let alice = Address::generate(&env);
+        let bob = Address::generate(&env);
+        register_user(&env, &registry, &alice, "alice");
+        register_user(&env, &registry, &bob, "bob");
+        let bot_id = client.mint_basic(&alice);
+
+        // Advance to just before the original expiry, then transfer —
+        // which renews both the bot entry's TTL and the contract
+        // instance's TTL.
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP - 1);
+        client.transfer(&bot_id, &alice, &bob);
+
+        // Advance well past what would have been the bot's *original*
+        // expiry ledger. Without the transfer-time renewal, it would now
+        // be archived.
+        automint_testutils::advance_ledger(&env, LEDGER_BUMP);
+
+        let bot = client.get_bot(&bot_id);
+        assert_eq!(bot.owner, bob);
+    }
+}
+
+// ── Issue #543: explicit authorization tests ──────────────────────────────
+//
+// The module above uses `mock_all_auths()`, which makes every
+// `require_auth()` call succeed unconditionally and therefore cannot catch a
+// missing or incorrect auth check. Each test here exercises one
+// `require_auth()` call site directly: the call must fail when the required
+// signer has not authorized it, and succeed when that signer's authorization
+// is explicitly mocked for exactly that invocation.
+#[cfg(test)]
+mod auth_tests {
+    use super::*;
+    use soroban_sdk::testutils::{Address as _, MockAuth, MockAuthInvoke};
+    use soroban_sdk::{Env, IntoVal};
+
+    fn setup_registry(env: &Env) -> Address {
+        let admin = Address::generate(env);
+        let registry_id = env.register_contract(None, automint_registry::RegistryContract);
+        let reg_client = automint_registry::RegistryContractClient::new(env, &registry_id);
+        env.mock_all_auths();
+        reg_client.initialize(&admin);
+        registry_id
+    }
+
+    #[test]
+    fn test_initialize_fails_without_admin_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+
+        env.mock_auths(&[]);
+        let result = client.try_initialize(&admin, &registry_id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_initialize_succeeds_with_admin_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+
+        env.mock_auths(&[MockAuth {
+            address: &admin,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "initialize",
+                args: (admin.clone(), registry_id.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_initialize(&admin, &registry_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_mint_basic_fails_without_owner_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin, &registry_id);
+
+        let owner = Address::generate(&env);
+        env.mock_auths(&[]);
+        let result = client.try_mint_basic(&owner);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mint_basic_succeeds_with_owner_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin, &registry_id);
+
+        let owner = Address::generate(&env);
+        env.mock_auths(&[MockAuth {
+            address: &owner,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "mint_basic",
+                args: (owner.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_mint_basic(&owner);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_mint_tier_fails_without_owner_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin, &registry_id);
+
+        let token_id = env.register_contract(None, automint_token::AMTToken);
+        let owner = Address::generate(&env);
+        env.mock_auths(&[]);
+        let result = client.try_mint_tier(&owner, &Tier::Basic, &token_id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mint_tier_succeeds_with_owner_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin, &registry_id);
+
+        let token_id = env.register_contract(None, automint_token::AMTToken);
+        let owner = Address::generate(&env);
+        // Tier::Basic carries a zero price, so no token transfer is required.
+        env.mock_auths(&[MockAuth {
+            address: &owner,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "mint_tier",
+                args: (owner.clone(), Tier::Basic, token_id.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_mint_tier(&owner, &Tier::Basic, &token_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_transfer_fails_without_from_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin, &registry_id);
+        let owner = Address::generate(&env);
+        let bot_id = client.mint_basic(&owner);
+
+        let to = Address::generate(&env);
+        env.mock_auths(&[]);
+        let result = client.try_transfer(&bot_id, &owner, &to);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_transfer_succeeds_with_from_auth() {
+        let env = Env::default();
+        let registry_id = setup_registry(&env);
+        let id = env.register_contract(None, BotNFTContract);
+        let client = BotNFTContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin, &registry_id);
+        let owner = Address::generate(&env);
+        let bot_id = client.mint_basic(&owner);
+
+        let to = Address::generate(&env);
+        env.mock_auths(&[MockAuth {
+            address: &owner,
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name: "transfer",
+                args: (bot_id, owner.clone(), to.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        }]);
+        let result = client.try_transfer(&bot_id, &owner, &to);
+        assert!(result.is_ok());
     }
 }

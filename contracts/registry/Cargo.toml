@@ -14,3 +14,4 @@ soroban-sdk = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { version = "21", features = ["testutils"] }
+automint-testutils = { path = "../testutils" }
