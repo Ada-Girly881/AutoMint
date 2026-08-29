@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #![cfg(test)]
 use super::*;
 use automint_bot_nft::BotNFTContractClient;

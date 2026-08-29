@@ -142,8 +142,8 @@ export default function DashboardPage() {
           <PointsCounter
             points={Number(profile?.points || BigInt(0))}
             rate={totalRate}
-            bots={bots}
-            amtBalance={amtBalance}
+            bots={bots || []}
+            amtBalance={amtBalance ?? BigInt(0)}
           />
 
           {/* Claim Button */}

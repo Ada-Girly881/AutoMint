@@ -70,7 +70,8 @@ export default function ProfilePage() {
     );
   }
 
-  const formatDate = (timestamp: bigint) => {
+  const formatDate = (timestamp?: bigint | number) => {
+    if (!timestamp) return 'N/A';
     const date = new Date(Number(timestamp) * 1000);
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
@@ -79,34 +80,31 @@ export default function ProfilePage() {
     });
   };
 
-  const formatPoints = (points: bigint) => {
-    return points.toLocaleString('en-US');
+  const formatPoints = (points?: bigint) => {
+    return (points ?? BigInt(0)).toLocaleString('en-US');
   };
 
-  const formatAmt = (amt: bigint) => {
-    // Assuming 7 decimals
+  const formatAmt = (amt?: bigint) => {
+    if (!amt) return '0.00';
     const amtNumber = Number(amt) / 10_000_000;
     return amtNumber.toFixed(2);
   };
 
+  const walletAddr = profile.address || publicKey;
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      <h1 className="mb-8 text-3xl font-bold text-gray-900 dark:text-white">
-        My Profile
-      </h1>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          {profile.username}&apos;s Profile
+        </h1>
+        <p className="mt-2 text-gray-600 dark:text-gray-400 font-mono text-sm">
+          {walletAddr}
+        </p>
+      </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Username Card */}
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Username
-          </h2>
-          <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
-            {profile.username}
-          </p>
-        </div>
-
-        {/* Registration Date Card */}
+        {/* Member Since Card */}
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
             Member Since
@@ -142,7 +140,7 @@ export default function ProfilePage() {
             Total Bots
           </h2>
           <p className="mt-2 text-2xl font-bold text-purple-600 dark:text-purple-400">
-            {profile.botCount}
+            {profile.botCount ?? bots?.length ?? 0}
           </p>
         </div>
 
@@ -152,7 +150,7 @@ export default function ProfilePage() {
             Wallet Address
           </h2>
           <p className="mt-2 text-lg font-mono text-gray-900 dark:text-white break-all">
-            {profile.address.slice(0, 8)}...{profile.address.slice(-8)}
+            {walletAddr.slice(0, 8)}...{walletAddr.slice(-8)}
           </p>
         </div>
       </div>

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! Shared test-only helpers for exercising ledger/TTL behaviour across the
 //! AutoMint contracts (registry, bot_nft, token, accrual, marketplace).
 //!

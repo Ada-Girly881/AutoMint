@@ -8,6 +8,10 @@ export type Tier = BotTier;
 export interface UserProfile {
   username: string;
   points: bigint;
+  address?: string;
+  botCount?: number;
+  claimedAmt?: bigint;
+  registeredAt?: number;
 }
 
 export interface BotNFT {

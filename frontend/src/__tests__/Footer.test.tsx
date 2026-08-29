@@ -53,6 +53,13 @@ describe("Footer Component", () => {
       "https://github.com/Ada-Girly881/AutoMint"
     );
     expect(githubLink).toHaveAttribute("target", "_blank");
+
+    const licenseLink = screen.getByRole("link", { name: /License/i });
+    expect(licenseLink).toHaveAttribute(
+      "href",
+      "https://github.com/Alaka-ibr/AutoMint/blob/main/LICENSE"
+    );
+    expect(licenseLink).toHaveAttribute("target", "_blank");
   });
 
   it("renders the current year in the copyright notice", () => {
@@ -67,14 +74,12 @@ describe("Footer Component", () => {
   it("renders the 'Built on' credits linking to Stellar and Soroban", () => {
     render(<Footer />);
 
-    expect(screen.getByRole("link", { name: "Stellar" })).toHaveAttribute(
-      "href",
-      "https://stellar.org"
-    );
-    expect(screen.getByRole("link", { name: "Soroban" })).toHaveAttribute(
-      "href",
-      "https://soroban.stellar.org"
-    );
+    expect(
+      screen.getByRole("link", { name: "Stellar (opens in new tab)" })
+    ).toHaveAttribute("href", "https://stellar.org");
+    expect(
+      screen.getByRole("link", { name: "Soroban (opens in new tab)" })
+    ).toHaveAttribute("href", "https://soroban.stellar.org");
   });
 
   it("does not throw when a link is clicked (no custom click handlers wired up)", async () => {

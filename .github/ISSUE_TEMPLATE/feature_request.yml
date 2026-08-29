@@ -1,0 +1,47 @@
+name: Feature Request
+description: Suggest an idea or feature enhancement for AutoMint
+title: "[Feature]: "
+labels: ["type:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Suggesting a new feature or improvement? Fill out the sections below.
+
+  - type: textarea
+    id: problem-statement
+    attributes:
+      label: Problem Statement / Context
+      description: Is your feature request related to a problem or user experience friction?
+      placeholder: Describe the problem...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution or user experience you would like to see implemented.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives-considered
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions or features you have considered.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Target Component / Area
+      options:
+        - "area:frontend"
+        - "area:contract"
+        - "area:docs"
+        - "area:ci"
+        - "area:setup"
+    validations:
+      required: true
