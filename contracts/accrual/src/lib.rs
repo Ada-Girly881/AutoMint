@@ -333,8 +333,8 @@ mod test {
         client.start_accrual(&user, &100_u64);
 
         env.ledger().with_mut(|ledger| {
-            ledger.sequence_number = ledger.sequence_number + 100;
-            ledger.timestamp = ledger.timestamp + 500;
+            ledger.sequence_number += 100;
+            ledger.timestamp += 500;
         });
 
         let pending = client.pending_points(&user);
@@ -350,8 +350,8 @@ mod test {
         client.start_accrual(&user, &1_u64);
 
         env.ledger().with_mut(|ledger| {
-            ledger.sequence_number = ledger.sequence_number + 10;
-            ledger.timestamp = ledger.timestamp + 50;
+            ledger.sequence_number += 10;
+            ledger.timestamp += 50;
         });
 
         let _pending = client.claim(&user, &token, &registry);
@@ -367,8 +367,8 @@ mod test {
         client.start_accrual(&user, &3600_u64);
 
         env.ledger().with_mut(|ledger| {
-            ledger.sequence_number = ledger.sequence_number + 10;
-            ledger.timestamp = ledger.timestamp + 50;
+            ledger.sequence_number += 10;
+            ledger.timestamp += 50;
         });
 
         let pending = client.claim(&user, &token, &registry);
@@ -384,16 +384,16 @@ mod test {
         client.start_accrual(&user, &3600_u64);
 
         env.ledger().with_mut(|ledger| {
-            ledger.sequence_number = ledger.sequence_number + 10;
-            ledger.timestamp = ledger.timestamp + 30;
+            ledger.sequence_number += 10;
+            ledger.timestamp += 30;
         });
 
         let pending = client.claim(&user, &token, &registry);
         assert_eq!(pending, 30);
 
         env.ledger().with_mut(|ledger| {
-            ledger.sequence_number = ledger.sequence_number + 10;
-            ledger.timestamp = ledger.timestamp + 30;
+            ledger.sequence_number += 10;
+            ledger.timestamp += 30;
         });
 
         let pending2 = client.claim(&user, &token, &registry);
