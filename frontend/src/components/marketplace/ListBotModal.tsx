@@ -4,7 +4,7 @@ import { useState, useMemo, useId } from "react";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import { useListBot } from "@/hooks/useMarketplace";
-import { xlmToStroops, stroopsToXlm } from "@/types";
+import { xlmToStroops } from "@/types";
 import type { BotNFT } from "@/types";
 
 // Code-split the modal shell (framer-motion + createPortal) out of the
