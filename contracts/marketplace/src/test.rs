@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg(test)]
+#![allow(clippy::inconsistent_digit_grouping)]
 use super::*;
 use automint_bot_nft::BotNFTContractClient;
 use automint_registry::RegistryContractClient;
