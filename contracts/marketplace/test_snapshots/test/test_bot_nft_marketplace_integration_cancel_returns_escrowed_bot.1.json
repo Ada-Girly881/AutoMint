@@ -521,6 +521,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "bonus_bps"
+                      },
+                      "val": {
+                        "u32": 41
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "id"
                       },
                       "val": {
@@ -558,6 +566,14 @@
                       "val": {
                         "u32": 0
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "variant"
+                      },
+                      "val": {
+                        "u32": 3
+                      }
                     }
                   ]
                 }
@@ -566,6 +582,51 @@
             "ext": "v0"
           },
           120960
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "TierSupply"
+                },
+                {
+                  "u32": 0
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "TierSupply"
+                    },
+                    {
+                      "u32": 0
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "u64": 1
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
         ]
       ],
       [
@@ -1855,6 +1916,14 @@
                 },
                 {
                   "key": {
+                    "symbol": "bonus_bps"
+                  },
+                  "val": {
+                    "u32": 41
+                  }
+                },
+                {
+                  "key": {
                     "symbol": "id"
                   },
                   "val": {
@@ -1891,6 +1960,14 @@
                   },
                   "val": {
                     "u32": 0
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "variant"
+                  },
+                  "val": {
+                    "u32": 3
                   }
                 }
               ]
@@ -2095,6 +2172,14 @@
                 },
                 {
                   "key": {
+                    "symbol": "bonus_bps"
+                  },
+                  "val": {
+                    "u32": 41
+                  }
+                },
+                {
+                  "key": {
                     "symbol": "id"
                   },
                   "val": {
@@ -2131,6 +2216,14 @@
                   },
                   "val": {
                     "u32": 0
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "variant"
+                  },
+                  "val": {
+                    "u32": 3
                   }
                 }
               ]
@@ -2356,6 +2449,14 @@
                 },
                 {
                   "key": {
+                    "symbol": "bonus_bps"
+                  },
+                  "val": {
+                    "u32": 41
+                  }
+                },
+                {
+                  "key": {
                     "symbol": "id"
                   },
                   "val": {
@@ -2392,6 +2493,14 @@
                   },
                   "val": {
                     "u32": 0
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "variant"
+                  },
+                  "val": {
+                    "u32": 3
                   }
                 }
               ]
