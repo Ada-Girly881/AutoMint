@@ -292,8 +292,8 @@ impl RegistryContract {
         }
         let take = limit.min(n) as usize;
         let mut result: Vec<UserProfile> = Vec::new(&env);
-        for i in 0..take {
-            result.push_back(profiles.get(i as u32).unwrap());
+        for p in profiles.iter().take(take) {
+            result.push_back(p);
         }
         result
     }
