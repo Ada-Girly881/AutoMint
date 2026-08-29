@@ -1,0 +1,21 @@
+# AutoMint Code Owners File
+# See https://help.github.com/articles/about-code-owners/ for details.
+
+# Default global owners for the repository
+* @Alaka-ibr
+
+# Smart contracts (Rust / Soroban)
+/contracts/ @Alaka-ibr
+*.rs @Alaka-ibr
+
+# Frontend application (Next.js / React / Tailwind)
+/frontend/ @Alaka-ibr
+
+# GitHub Actions workflows & CI configuration
+/.github/workflows/ @Alaka-ibr
+/.github/ @Alaka-ibr
+
+# Core documentation & Architecture Decision Records
+/docs/ @Alaka-ibr
+README.md @Alaka-ibr
+CONTRIBUTING.md @Alaka-ibr

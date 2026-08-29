@@ -15,7 +15,7 @@ import type { MarketplaceListing, BotNFT } from "@/types";
 
 interface BotListingCardProps {
   listing: MarketplaceListing;
-  bot: BotNFT;
+  bot?: BotNFT;
   connectedAddress: string | null;
   onBuy: (listingId: bigint) => void;
   onCancel: (listingId: bigint) => void;
@@ -37,7 +37,7 @@ export default function BotListingCard({
   isBuying = false,
   isCancelling = false,
 }: BotListingCardProps) {
-  const tier = bot.tier as BotTier;
+  const tier = (bot?.tier ?? "Basic") as BotTier;
   const tierName = BOT_TIER_NAMES[tier] ?? "Unknown";
   const tierColor = BOT_TIER_COLORS[tier] ?? "text-muted";
   const tierBg = BOT_TIER_BG_COLORS[tier] ?? "bg-muted/20";
@@ -46,7 +46,7 @@ export default function BotListingCard({
   const isOwner =
     connectedAddress !== null &&
     listing.seller.toLowerCase() === connectedAddress.toLowerCase();
-  const botLabel = `${bot.name || tierName} Bot #${bot.id.toString()}`;
+  const botLabel = `${bot?.name || tierName} Bot #${bot?.id?.toString() || listing.bot_id.toString()}`;
 
   return (
     <motion.div
@@ -76,9 +76,9 @@ export default function BotListingCard({
           </div>
           <div className="min-w-0">
             <p className="truncate font-display text-sm font-semibold text-text">
-              {bot.name || tierName} Bot
+              {bot?.name || tierName} Bot
             </p>
-            <p className="text-xs text-muted">#{bot.id.toString()}</p>
+            <p className="text-xs text-muted">#{bot?.id?.toString() || listing.bot_id.toString()}</p>
           </div>
         </div>
 
@@ -103,7 +103,7 @@ export default function BotListingCard({
               Rate
             </p>
             <p className="text-sm font-semibold text-text">
-              {bot.accrual_rate.toString()}{" "}
+              {(bot?.accrual_rate ?? BigInt(tierMeta?.rate || 1)).toString()}{" "}
               <span className="text-xs font-normal text-muted">pt/hr</span>
             </p>
           </div>

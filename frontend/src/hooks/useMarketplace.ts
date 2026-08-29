@@ -52,7 +52,6 @@ export function useListings() {
     refetchInterval: 30000,
     staleTime: 15_000,
     gcTime: 120_000,
-    staleTime: 15000,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
@@ -68,7 +67,6 @@ export function useMyListings() {
     refetchInterval: 30000,
     staleTime: 15_000,
     gcTime: 120_000,
-    staleTime: 15000,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });

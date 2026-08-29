@@ -181,26 +181,27 @@ Automated CI Workflows:
 
 ## Branching & Pull Request Guidelines
 
-1. **Base Branch**: Always branch off **`testnet-implementation`**.
+1. **Base Branch**: Always branch off **`main`**.
    ```bash
-   git checkout testnet-implementation
-   git pull origin testnet-implementation
+   git checkout main
+   git pull origin main
    git checkout -b fix/your-feature-name
    ```
-2. **PR Target Branch**: Open your Pull Request targeting **`testnet-implementation`** (do NOT target `main`).
+2. **PR Target Branch**: Open your Pull Request targeting **`main`**.
 3. **Commit Standard**: Write clean, descriptive commit messages describing what was modified and referencing issue numbers (`Closes #123`).
 
 ---
 
 ## Documentation Links
 
-- [Contract Architecture Specification](file:///Users/macosbigsur/Documents/Code/AutoMint/docs/architecture.md) (`docs/architecture.md`)
-- [Developer Onboarding Guide](file:///Users/macosbigsur/Documents/Code/AutoMint/docs/ONBOARDING.md) (`docs/ONBOARDING.md`)
-- [Sequence & Journey Flows](file:///Users/macosbigsur/Documents/Code/AutoMint/docs/FLOWS.md) (`docs/FLOWS.md`)
-- [Project Changelog](file:///Users/macosbigsur/Documents/Code/AutoMint/CHANGELOG.md) (`CHANGELOG.md`)
+- [Contract Architecture Specification](docs/architecture.md) (`docs/architecture.md`)
+- [Developer Onboarding Guide](docs/ONBOARDING.md) (`docs/ONBOARDING.md`)
+- [Sequence & Journey Flows](docs/FLOWS.md) (`docs/FLOWS.md`)
+- [Deployment & CI Preview Documentation](docs/DEPLOYMENT.md) (`docs/DEPLOYMENT.md`)
+- [Project Changelog](CHANGELOG.md) (`CHANGELOG.md`)
 
 ---
 
 ## License
 
-MIT License. See `LICENSE` for details.
+Apache License 2.0 (Apache-2.0). See [LICENSE](LICENSE) for details.

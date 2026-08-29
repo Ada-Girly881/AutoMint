@@ -1,0 +1,69 @@
+name: Bug Report
+description: Create a bug report to help us fix issues and improve AutoMint
+title: "[Bug]: "
+labels: ["type:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug! Please fill out the form below as completely as possible.
+
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe the issue...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: What steps are required to reproduce the behavior?
+      placeholder: |
+        1. Go to '...'
+        2. Click on '....'
+        3. Scroll down to '....'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: A clear description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior / Screenshots
+      description: Describe what actually happened, including error logs or screenshots if applicable.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected Area
+      options:
+        - "area:contract"
+        - "area:frontend"
+        - "area:docs"
+        - "area:ci"
+        - "area:setup"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment Details
+      description: OS version, Node version, Freighter extension version, Rust version, etc.
+      placeholder: e.g. macOS 14.5, Node v18.20.0, Chrome 125, Freighter v5.8.0
+    validations:
+      required: false

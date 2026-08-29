@@ -1,39 +1,73 @@
-# Contributing to AutoMint (testnet-implementation)
+# Contributing to AutoMint
 
-This branch is being rebuilt piece by piece through GitHub Issues. Each issue is scoped to one file or one function/component so multiple people can work in parallel without colliding.
+Thank you for contributing to AutoMint! This codebase is built through open-source GitHub Issues scoped to specific features, components, and contracts.
+
+---
 
 ## Workflow
 
-1. Find an unassigned issue labeled for the area you want to work in (`contract`, `frontend`, `hook`, `component`, `test`, `docs`, `setup`).
-2. Comment `"I'll take this"` on the issue — wait for it to be assigned to you before starting.
-3. Fork the repo (or branch directly if you have write access) from `testnet-implementation`:
+1. **Find an Issue**: Look for unassigned issues using repository labels:
+   - **Area**: `area:contract`, `area:frontend`, `area:docs`, `area:ci`, `area:setup`
+   - **Contract**: `contract:registry`, `contract:bot_nft`, `contract:accrual`, `contract:marketplace`, `contract:token`
+   - **Type**: `type:bug`, `type:feature`, `type:security`, `type:refactor`, `type:docs`
+   - **Difficulty**: `difficulty:easy`, `difficulty:medium`, `difficulty:hard`
+
+2. **Claim the Issue**: Comment `"I'll take this"` on the issue and wait for it to be assigned to you before starting work.
+
+3. **Branch from `main`**:
    ```bash
-   git checkout testnet-implementation
-   git pull
+   git checkout main
+   git pull origin main
    git checkout -b <issue-number>-<short-description>
    ```
-4. Implement **only** what the issue describes. Leave the `// TODO` markers in any file your issue doesn't cover.
-5. For any issue that changes a cross-contract contract, add or update an Architecture Decision Record in `docs/adr/`. Start from `docs/adr/0000-template.md` and make sure the ADR states context, decision, alternatives considered, and consequences.
-6. Run the relevant test suite locally:
-   ```bash
-   cargo test --workspace          # contract issues
-   cd frontend && npm test          # frontend issues
-   npx tsc --noEmit                 # frontend issues
-   npm run lhci                     # frontend performance issues
-   ```
-7. Open a PR **targeting `testnet-implementation`**, not `main`. Title it after the issue, and include `Closes #<issue-number>` in the description.
 
-CI runs `cargo fmt --check`, `cargo clippy -- -D warnings`, `next lint`, and `tsc --noEmit` on every PR (see `.github/workflows/ci.yml`). To catch violations before pushing, enable the fast pre-commit hook once per clone:
+4. **Implement Scoped Changes**: Implement **only** what the issue describes. Keep your PR focused and small. If you discover unrelated bugs or improvements, open a separate issue.
+
+5. **Architecture Decision Records (ADRs)**: For changes affecting cross-contract architecture, storage layout, or auth logic, add or update an ADR under `docs/adr/`.
+
+6. **Local Verification**:
+   Run the full verification suite locally before opening a pull request:
+   ```bash
+   # Rust Smart Contracts
+   cargo test --workspace
+
+   # Frontend Unit & Component Tests
+   cd frontend && npm test
+
+   # TypeScript Type Checking
+   cd frontend && npm run type-check
+
+   # Frontend Linting
+   cd frontend && npm run lint
+   ```
+
+7. **Submit Pull Request**:
+   Open a PR **targeting the `main` branch**. Title it after the issue and include `Closes #<issue-number>` in the PR description.
+
+---
+
+## Pre-Commit Hook
+
+Enable the repository pre-commit hook to catch formatting and lint issues automatically:
 ```bash
 git config core.hooksPath .githooks
 ```
 
-## Code style
+---
 
-- **Rust**: follow standard `rustfmt` formatting (`cargo fmt`). Contract functions should return `Result<T, Error>` for any fallible operation — no panics on user input.
-- **TypeScript**: match the existing patterns in sibling files (hooks use React Query, components use the MemeFi CSS variable theme in `globals.css`). No `any` types.
-- Keep PRs scoped to the issue. If you spot an unrelated bug, open a new issue instead of fixing it inline.
+## Code Style & Enforcement Mechanisms
 
-## Questions
+| Rule | Area | Enforcement Mechanism |
+|---|---|---|
+| Code Formatting (`rustfmt`) | Rust | **Machine-enforced in CI** (`cargo fmt --check`) |
+| Compiler Lints | Rust | **Machine-enforced in CI** (`cargo clippy -- -D warnings`) |
+| No Panics on User Input | Rust | **Review-only** *(Automated clippy lint enforcement landing in AM-223)* |
+| Static Type Safety | TypeScript | **Machine-enforced in CI** (`npm run type-check`) |
+| Code Linting | TypeScript | **Machine-enforced in CI** (`npm run lint`) |
+| No `any` Types | TypeScript | **Review-only** *(ESLint rule enforcement landing in AM-223)* |
 
-If an issue's scope is unclear, ask in the issue thread before starting — it's much cheaper to clarify than to redo work.
+---
+
+## Questions & Assistance
+
+If an issue's requirements or scope are unclear, leave a question directly in the issue thread.

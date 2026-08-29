@@ -10,6 +10,7 @@ const footerLinks = {
     { label: "Documentation", href: "https://soroban.stellar.org", external: true },
     { label: "Stellar Network", href: "https://stellar.org", external: true },
     { label: "Soroban Docs", href: "https://soroban.stellar.org/docs", external: true },
+    { label: "License (Apache-2.0)", href: "https://github.com/Alaka-ibr/AutoMint/blob/main/LICENSE", external: true },
   ],
   community: [
     { label: "GitHub", href: "https://github.com/Ada-Girly881/AutoMint", external: true, icon: Github },

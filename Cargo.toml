@@ -9,6 +9,9 @@ members = [
     "contracts/testutils",
 ]
 
+[workspace.package]
+license = "Apache-2.0"
+
 [workspace.dependencies]
 soroban-sdk = { version = "21", default-features = false }
 
