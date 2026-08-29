@@ -10,10 +10,24 @@ const footerLinks = {
     { label: "Documentation", href: "https://soroban.stellar.org", external: true },
     { label: "Stellar Network", href: "https://stellar.org", external: true },
     { label: "Soroban Docs", href: "https://soroban.stellar.org/docs", external: true },
-    { label: "License (Apache-2.0)", href: "https://github.com/Alaka-ibr/AutoMint/blob/main/LICENSE", external: true },
+    {
+      label: "License (Apache-2.0)",
+      href: "https://github.com/Alaka-ibr/AutoMint/blob/main/LICENSE",
+      external: true,
+    },
+    {
+      label: "Privacy Policy",
+      href: "https://github.com/Ada-Girly881/AutoMint/blob/testnet-implementation/frontend/docs/PRIVACY.md",
+      external: true,
+    },
   ],
   community: [
-    { label: "GitHub", href: "https://github.com/Ada-Girly881/AutoMint", external: true, icon: Github },
+    {
+      label: "GitHub",
+      href: "https://github.com/Ada-Girly881/AutoMint",
+      external: true,
+      icon: Github,
+    },
     { label: "Discord", href: "#", external: true },
   ],
 };
@@ -27,9 +41,7 @@ function FooterLinkGroup({
 }) {
   return (
     <nav aria-label={title} className="flex flex-col gap-2.5">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
-        {title}
-      </h3>
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">{title}</h3>
       <ul className="flex flex-col gap-1.5">
         {links.map((link) => (
           <li key={link.label}>
@@ -94,7 +106,9 @@ export default function Footer() {
             >
               Soroban
             </a>
-            <span className="mx-1 text-muted" aria-hidden="true">&middot;</span>
+            <span className="mx-1 text-muted" aria-hidden="true">
+              &middot;
+            </span>
             <span>React</span>
             <span aria-hidden="true">+</span>
             <span>Next.js</span>
