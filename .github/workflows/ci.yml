@@ -26,13 +26,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - name: Install Rust toolchain
+        run: rustup show
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
       - name: cargo fmt --check
         run: cargo fmt --all --check
       - name: cargo clippy
         run: cargo clippy --workspace -- -D warnings
+      - name: cargo test
+        run: cargo test --workspace
+      - name: cargo build wasm
+        run: cargo build --target wasm32v1-none --release
+      - name: Upload wasm artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-artifacts
+          path: target/wasm32v1-none/release/*.wasm
 
   frontend:
     name: Frontend (lint, type-check)
@@ -53,3 +63,7 @@ jobs:
         run: npm run lint
       - name: Type-check
         run: npm run type-check
+      - name: Test
+        run: npm run test:ci
+      - name: Build
+        run: npm run build
