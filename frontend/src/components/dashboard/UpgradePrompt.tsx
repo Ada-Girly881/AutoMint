@@ -4,12 +4,17 @@ import { motion } from "framer-motion";
 import { ArrowUpRight, TrendingUp } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
+import { TIER_META } from "@/types";
 
 interface UpgradePromptProps {
   currentRate: number;
 }
 
 export default function UpgradePrompt({ currentRate: _currentRate }: UpgradePromptProps) {
+  const basicRate = TIER_META.Basic.rate;
+  const diamondRate = TIER_META.Diamond.rate;
+  const diamondMultiplier = diamondRate / basicRate;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -24,7 +29,7 @@ export default function UpgradePrompt({ currentRate: _currentRate }: UpgradeProm
             <h4 className="font-display text-sm font-semibold text-text">Boost Your Earnings</h4>
           </div>
           <p className="mt-2 text-xs text-muted">
-            Upgrade to higher-tier bots to earn points faster. Diamond bots earn 25x the rate of
+            Upgrade to higher-tier bots to earn points faster. Diamond bots earn {diamondMultiplier}x the rate of
             Basic bots!
           </p>
         </div>

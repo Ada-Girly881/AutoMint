@@ -91,10 +91,10 @@ describe('Landing Page Integration', () => {
     expect(screen.getByText('Diamond')).toBeInTheDocument();
     // Check prices
     expect(screen.getByText('Free')).toBeInTheDocument();
-    expect(screen.getByText('5 XLM')).toBeInTheDocument();
-    expect(screen.getByText('15 XLM')).toBeInTheDocument();
-    expect(screen.getByText('40 XLM')).toBeInTheDocument();
-    expect(screen.getByText('100 XLM')).toBeInTheDocument();
+    expect(screen.getByText('500 XLM')).toBeInTheDocument();
+    expect(screen.getByText('2000 XLM')).toBeInTheDocument();
+    expect(screen.getByText('7500 XLM')).toBeInTheDocument();
+    expect(screen.getByText('25000 XLM')).toBeInTheDocument();
   });
 
   it('renders How It Works section with four steps', () => {
@@ -146,9 +146,9 @@ describe('Landing Page Integration', () => {
   it('renders all tiers with correct accrual rates', () => {
     render(<HomePage />);
     expect(screen.getByText('1x accrual rate')).toBeInTheDocument();
-    expect(screen.getByText('2x accrual rate')).toBeInTheDocument();
     expect(screen.getByText('5x accrual rate')).toBeInTheDocument();
-    expect(screen.getByText('10x accrual rate')).toBeInTheDocument();
     expect(screen.getByText('25x accrual rate')).toBeInTheDocument();
+    expect(screen.getByText('100x accrual rate')).toBeInTheDocument();
+    expect(screen.getByText('500x accrual rate')).toBeInTheDocument();
   });
 });

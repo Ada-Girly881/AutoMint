@@ -76,10 +76,10 @@ export interface TierMeta {
 
 export const TIER_META: Record<BotTier, TierMeta> = {
   Basic: { color: "text-tier-basic", rate: 1, price: 0, emoji: "🤖" },
-  Bronze: { color: "text-tier-bronze", rate: 2, price: 5, emoji: "🥉" },
-  Silver: { color: "text-tier-silver", rate: 5, price: 15, emoji: "🥈" },
-  Gold: { color: "text-tier-gold", rate: 10, price: 40, emoji: "🥇" },
-  Diamond: { color: "text-tier-diamond", rate: 25, price: 100, emoji: "💎" },
+  Bronze: { color: "text-tier-bronze", rate: 5, price: 500, emoji: "🥉" },
+  Silver: { color: "text-tier-silver", rate: 25, price: 2000, emoji: "🥈" },
+  Gold: { color: "text-tier-gold", rate: 100, price: 7500, emoji: "🥇" },
+  Diamond: { color: "text-tier-diamond", rate: 500, price: 25000, emoji: "💎" },
 };
 
 const TIER_ORDER: BotTier[] = ["Basic", "Bronze", "Silver", "Gold", "Diamond"];
