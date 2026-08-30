@@ -1,15 +1,38 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Bot, Clock, Zap, Tag } from "lucide-react";
+import { Bot, Clock, Zap, Tag, Circle, Shield, Hexagon, Crown, Gem } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import clsx from "clsx";
 import { BOT_TIER_NAMES, BOT_TIER_COLORS, BOT_TIER_BG_COLORS } from "@/types";
-import type { BotNFT } from "@/types";
+import type { BotNFT, BotTier } from "@/types";
 
 interface BotCardProps {
   bot: BotNFT;
   onListForSale?: (botId: bigint) => void;
 }
+
+/**
+ * Non-colour tier differentiators (WCAG 1.4.1). Each tier gets a distinct
+ * icon *shape* and a distinct badge *border pattern* so the tier is
+ * identifiable in greyscale and by screen readers via the adjacent text
+ * label — colour is never the only signal.
+ */
+const TIER_ICON: Record<BotTier, LucideIcon> = {
+  Basic: Circle,
+  Bronze: Shield,
+  Silver: Hexagon,
+  Gold: Crown,
+  Diamond: Gem,
+};
+
+const TIER_BADGE_BORDER: Record<BotTier, string> = {
+  Basic: "border border-dashed border-current/40",
+  Bronze: "border border-dotted border-current/50",
+  Silver: "border border-solid border-current/40",
+  Gold: "border-2 border-double border-current/60",
+  Diamond: "border-2 border-dashed border-current/50",
+};
 
 function formatDate(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleDateString("en-US", {
@@ -23,6 +46,8 @@ export default function BotCard({ bot, onListForSale }: BotCardProps) {
   const tierName = BOT_TIER_NAMES[bot.tier] ?? "Unknown";
   const tierColor = BOT_TIER_COLORS[bot.tier] ?? "text-muted";
   const tierBg = BOT_TIER_BG_COLORS[bot.tier] ?? "bg-muted/20";
+  const TierIcon = TIER_ICON[bot.tier] ?? Circle;
+  const tierBorder = TIER_BADGE_BORDER[bot.tier] ?? "border border-solid border-current/40";
 
   return (
     <motion.div
@@ -57,13 +82,17 @@ export default function BotCard({ bot, onListForSale }: BotCardProps) {
         </div>
 
         <span
+          data-testid="tier-badge"
+          data-tier={tierName}
           className={clsx(
-            "inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5",
+            "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5",
             "text-xs font-medium",
             tierBg,
             tierColor,
+            tierBorder,
           )}
         >
+          <TierIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
           {tierName}
         </span>
       </div>
