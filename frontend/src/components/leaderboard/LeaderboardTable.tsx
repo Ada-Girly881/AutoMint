@@ -3,7 +3,6 @@
 import React from "react";
 import { motion } from "framer-motion";
 import clsx from "clsx";
-import { Medal } from "lucide-react";
 
 export interface LeaderboardUser {
   rank: number;
@@ -86,9 +85,7 @@ function LeaderboardTableComponent({ users, currentAddress }: LeaderboardTablePr
                 aria-current={isCurrentUser ? "true" : undefined}
                 className={clsx(
                   "border-b border-liner transition-colors",
-                  isCurrentUser
-                    ? "bg-gold/5 border-l-2 border-l-gold"
-                    : "hover:bg-white/[0.02]"
+                  isCurrentUser ? "bg-gold/5 border-l-2 border-l-gold" : "hover:bg-white/[0.02]",
                 )}
               >
                 {/* Rank */}
@@ -110,10 +107,7 @@ function LeaderboardTableComponent({ users, currentAddress }: LeaderboardTablePr
                 <td className="px-2 py-3 sm:px-4">
                   <div className="flex items-center gap-2">
                     <span
-                      className={clsx(
-                        "font-medium",
-                        isCurrentUser ? "text-gold" : "text-text"
-                      )}
+                      className={clsx("font-medium", isCurrentUser ? "text-gold" : "text-text")}
                     >
                       {user.username || `Trader #${user.rank}`}
                     </span>

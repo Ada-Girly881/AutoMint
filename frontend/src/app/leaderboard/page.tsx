@@ -7,27 +7,13 @@ import { Trophy, RotateCw } from "lucide-react";
 import { useLeaderboard } from "@/hooks/useLeaderboard";
 import { useWalletStore } from "@/store/walletStore";
 import { Skeleton } from "@/components/ui/Skeleton";
-import type { UserProfile } from "@/types";
 
 // Code-split the table (framer-motion row animations) out of the route's
 // initial bundle — it's only needed once data has loaded.
 const LeaderboardTable = dynamic(
   () => import("@/components/leaderboard/LeaderboardTable").then((mod) => mod.LeaderboardTable),
-  { ssr: false }
+  { ssr: false },
 );
-
-function mapToTableUsers(
-  users: UserProfile[],
-  currentAddress: string | null
-) {
-  return users.map((user, index) => ({
-    rank: index + 1,
-    username: user.username,
-    address: currentAddress ?? "",
-    points: Number(user.points),
-    isCurrentUser: false, // address matching handled inside table via currentAddress prop
-  }));
-}
 
 export default function LeaderboardPage() {
   const { data: leaderboardData, isLoading, isError, refetch, isRefetching } = useLeaderboard();
@@ -53,9 +39,7 @@ export default function LeaderboardPage() {
           <Trophy className="h-5 w-5 text-gold" />
         </div>
         <div>
-          <h1 className="font-display text-2xl font-bold text-text">
-            Leaderboard
-          </h1>
+          <h1 className="font-display text-2xl font-bold text-text">Leaderboard</h1>
           <p className="text-sm text-muted">Top earners across the network</p>
         </div>
       </div>
@@ -93,9 +77,7 @@ export default function LeaderboardPage() {
           className="rounded-2xl border border-liner bg-card px-6 py-10 text-center text-muted"
           data-testid="leaderboard-error"
         >
-          <p className="text-sm">
-            Failed to load leaderboard. Please try again later.
-          </p>
+          <p className="text-sm">Failed to load leaderboard. Please try again later.</p>
           <button
             onClick={() => refetch()}
             disabled={isRefetching}

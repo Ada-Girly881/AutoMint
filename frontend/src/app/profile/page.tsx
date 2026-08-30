@@ -1,9 +1,8 @@
-'use client';
+"use client";
 
-import { Skeleton } from '@/components/ui/Skeleton';
-import { useWalletStore } from '@/store/walletStore';
-import { useProfile, useBots } from '@/hooks/useAccrual';
-import { toast } from 'sonner';
+import { Skeleton } from "@/components/ui/Skeleton";
+import { useWalletStore } from "@/store/walletStore";
+import { useProfile, useBots } from "@/hooks/useAccrual";
 
 export default function ProfilePage() {
   const publicKey = useWalletStore((s) => s.publicKey);
@@ -14,9 +13,7 @@ export default function ProfilePage() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Connect Your Wallet
-          </h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Connect Your Wallet</h2>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
             Please connect your wallet to view your profile
           </p>
@@ -59,9 +56,7 @@ export default function ProfilePage() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Profile Not Found
-          </h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Profile Not Found</h2>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
             Please register to create your profile
           </p>
@@ -71,21 +66,21 @@ export default function ProfilePage() {
   }
 
   const formatDate = (timestamp?: bigint | number) => {
-    if (!timestamp) return 'N/A';
+    if (!timestamp) return "N/A";
     const date = new Date(Number(timestamp) * 1000);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     });
   };
 
   const formatPoints = (points?: bigint) => {
-    return (points ?? BigInt(0)).toLocaleString('en-US');
+    return (points ?? BigInt(0)).toLocaleString("en-US");
   };
 
   const formatAmt = (amt?: bigint) => {
-    if (!amt) return '0.00';
+    if (!amt) return "0.00";
     const amtNumber = Number(amt) / 10_000_000;
     return amtNumber.toFixed(2);
   };
@@ -98,17 +93,13 @@ export default function ProfilePage() {
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
           {profile.username}&apos;s Profile
         </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400 font-mono text-sm">
-          {walletAddr}
-        </p>
+        <p className="mt-2 text-gray-600 dark:text-gray-400 font-mono text-sm">{walletAddr}</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Member Since Card */}
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Member Since
-          </h2>
+          <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Member Since</h2>
           <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
             {formatDate(profile.registeredAt)}
           </p>
@@ -116,9 +107,7 @@ export default function ProfilePage() {
 
         {/* Total Points Card */}
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Total Points
-          </h2>
+          <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Points</h2>
           <p className="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400">
             {formatPoints(profile.points)}
           </p>
@@ -126,9 +115,7 @@ export default function ProfilePage() {
 
         {/* Claimed AMT Card */}
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Claimed AMT
-          </h2>
+          <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Claimed AMT</h2>
           <p className="mt-2 text-2xl font-bold text-green-600 dark:text-green-400">
             {formatAmt(profile.claimedAmt)} AMT
           </p>
@@ -136,9 +123,7 @@ export default function ProfilePage() {
 
         {/* Bot Count Card */}
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Total Bots
-          </h2>
+          <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Bots</h2>
           <p className="mt-2 text-2xl font-bold text-purple-600 dark:text-purple-400">
             {profile.botCount ?? bots?.length ?? 0}
           </p>
@@ -146,9 +131,7 @@ export default function ProfilePage() {
 
         {/* Wallet Address Card */}
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Wallet Address
-          </h2>
+          <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Wallet Address</h2>
           <p className="mt-2 text-lg font-mono text-gray-900 dark:text-white break-all">
             {walletAddr.slice(0, 8)}...{walletAddr.slice(-8)}
           </p>

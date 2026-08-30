@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { Bot, Clock, Zap, Tag } from "lucide-react";
 import clsx from "clsx";
-import { BotTier, BOT_TIER_NAMES, BOT_TIER_COLORS, BOT_TIER_BG_COLORS } from "@/types";
+import { BOT_TIER_NAMES, BOT_TIER_COLORS, BOT_TIER_BG_COLORS } from "@/types";
 import type { BotNFT } from "@/types";
 
 interface BotCardProps {
@@ -32,7 +32,7 @@ export default function BotCard({ bot, onListForSale }: BotCardProps) {
       className={clsx(
         "relative rounded-2xl border border-liner bg-card p-5",
         "flex flex-col gap-4",
-        "hover:border-white/10 transition-colors"
+        "hover:border-white/10 transition-colors",
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -40,7 +40,7 @@ export default function BotCard({ bot, onListForSale }: BotCardProps) {
           <div
             className={clsx(
               "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
-              tierBg
+              tierBg,
             )}
           >
             <Bot className={clsx("h-5 w-5", tierColor)} aria-hidden="true" />
@@ -61,7 +61,7 @@ export default function BotCard({ bot, onListForSale }: BotCardProps) {
             "inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5",
             "text-xs font-medium",
             tierBg,
-            tierColor
+            tierColor,
           )}
         >
           {tierName}
@@ -72,11 +72,10 @@ export default function BotCard({ bot, onListForSale }: BotCardProps) {
         <div className="flex items-center gap-2 rounded-lg bg-card-2 px-3 py-2">
           <Zap className="h-3.5 w-3.5 shrink-0 text-gold" aria-hidden="true" />
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-wider text-muted">
-              Rate
-            </p>
+            <p className="text-[10px] uppercase tracking-wider text-muted">Rate</p>
             <p className="truncate text-sm font-semibold text-text">
-              {bot.accrual_rate.toString()} <span className="text-xs font-normal text-muted">pt/hr</span>
+              {bot.accrual_rate.toString()}{" "}
+              <span className="text-xs font-normal text-muted">pt/hr</span>
             </p>
           </div>
         </div>
@@ -84,12 +83,8 @@ export default function BotCard({ bot, onListForSale }: BotCardProps) {
         <div className="flex items-center gap-2 rounded-lg bg-card-2 px-3 py-2">
           <Clock className="h-3.5 w-3.5 shrink-0 text-blue" aria-hidden="true" />
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-wider text-muted">
-              Minted
-            </p>
-            <p className="truncate text-sm font-semibold text-text">
-              {formatDate(bot.minted_at)}
-            </p>
+            <p className="text-[10px] uppercase tracking-wider text-muted">Minted</p>
+            <p className="truncate text-sm font-semibold text-text">{formatDate(bot.minted_at)}</p>
           </div>
         </div>
       </div>
@@ -104,7 +99,7 @@ export default function BotCard({ bot, onListForSale }: BotCardProps) {
             "rounded-xl border border-liner bg-card-2 px-4 py-2.5",
             "text-sm font-medium text-text",
             "hover:bg-white/5 hover:border-white/10 transition-colors",
-            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
           )}
         >
           <Tag className="h-3.5 w-3.5" aria-hidden="true" />

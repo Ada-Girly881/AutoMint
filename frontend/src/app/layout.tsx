@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import Providers from "./providers";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import "./globals.css";
 
 const sora = Sora({
@@ -24,18 +25,16 @@ export const metadata: Metadata = {
     "Mint AI-powered bot NFTs on Stellar, earn points through daily accrual, and trade on the marketplace.",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${sora.variable} ${inter.variable}`}>
       <body className="flex min-h-screen flex-col bg-bg font-sans text-text">
         <Providers>
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
+          <ErrorBoundary>
+            <Header />
+            <main className="flex-1">{children}</main>
+            <Footer />
+          </ErrorBoundary>
           <Toaster
             position="bottom-right"
             toastOptions={{

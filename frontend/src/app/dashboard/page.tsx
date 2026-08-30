@@ -1,7 +1,14 @@
 "use client";
 
 import { useWallet } from "@/hooks/useWallet";
-import { useRegistered, useProfile, useBots, useAccrualState, useClaim, useAmtBalance } from "@/hooks/useAccrual";
+import {
+  useRegistered,
+  useProfile,
+  useBots,
+  useAccrualState,
+  useClaim,
+  useAmtBalance,
+} from "@/hooks/useAccrual";
 import { useAllBotDetails } from "@/hooks/useBotDetails";
 import { getPendingPoints } from "@/lib/contracts";
 import { useState, useEffect } from "react";
@@ -10,7 +17,6 @@ import ClaimButton from "@/components/dashboard/ClaimButton";
 import BotCard from "@/components/dashboard/BotCard";
 import RegistrationBanner from "@/components/dashboard/RegistrationBanner";
 import UpgradePrompt from "@/components/dashboard/UpgradePrompt";
-import { BotCardSkeleton } from "@/components/ui/Skeleton";
 import { Wallet, Loader2, Bot } from "lucide-react";
 import clsx from "clsx";
 import type { BotNFT } from "@/types";
@@ -24,21 +30,22 @@ export default function DashboardPage() {
   const { data: bots } = useAllBotDetails(botIds || []);
   const { data: amtBalance } = useAmtBalance();
   const claim = useClaim();
-  
+
   const [pendingPoints, setPendingPoints] = useState<bigint>(BigInt(0));
-  const [isLoadingPending, setIsLoadingPending] = useState(false);
 
   // Calculate total accrual rate from bots
-  const totalRate = bots?.reduce((sum: number, bot: { accrual_rate: bigint }) => sum + Number(bot.accrual_rate), 0) || 0;
+  const totalRate =
+    bots?.reduce(
+      (sum: number, bot: { accrual_rate: bigint }) => sum + Number(bot.accrual_rate),
+      0,
+    ) || 0;
 
   // Fetch pending points when connected
   useEffect(() => {
     if (publicKey && isRegistered) {
-      setIsLoadingPending(true);
       getPendingPoints(publicKey)
         .then(setPendingPoints)
-        .catch(() => setPendingPoints(BigInt(0)))
-        .finally(() => setIsLoadingPending(false));
+        .catch(() => setPendingPoints(BigInt(0)));
     }
   }, [publicKey, isRegistered, accrualState]);
 
@@ -73,7 +80,7 @@ export default function DashboardPage() {
               "text-sm font-medium text-gold border border-gold/30",
               "transition-all hover:bg-gold/20 hover:border-gold/50",
               "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-              "disabled:cursor-not-allowed disabled:opacity-50"
+              "disabled:cursor-not-allowed disabled:opacity-50",
             )}
           >
             {isConnecting ? (
@@ -109,9 +116,7 @@ export default function DashboardPage() {
     return (
       <div className="mx-auto max-w-7xl px-6 py-8">
         <div className="max-w-xl">
-          <h1 className="font-display text-3xl font-bold text-text sm:text-4xl">
-            Dashboard
-          </h1>
+          <h1 className="font-display text-3xl font-bold text-text sm:text-4xl">Dashboard</h1>
           <p className="mt-2 text-sm text-muted">
             Manage your AI bot NFTs and track your earnings.
           </p>
@@ -162,12 +167,8 @@ export default function DashboardPage() {
         {/* Right column - Bot Grid */}
         <div className="flex flex-col gap-6">
           <div className="flex items-center justify-between">
-            <h2 className="font-display text-lg font-semibold text-text">
-              Your Bots
-            </h2>
-            <span className="text-sm text-muted">
-              {bots?.length || 0} owned
-            </span>
+            <h2 className="font-display text-lg font-semibold text-text">Your Bots</h2>
+            <span className="text-sm text-muted">{bots?.length || 0} owned</span>
           </div>
 
           {bots && bots.length > 0 ? (
