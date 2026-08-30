@@ -1,13 +1,29 @@
 "use client";
 
 import { Skeleton } from "@/components/ui/Skeleton";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { useWalletStore } from "@/store/walletStore";
 import { useProfile, useBots } from "@/hooks/useAccrual";
 
 export default function ProfilePage() {
   const publicKey = useWalletStore((s) => s.publicKey);
-  const { data: profile, isLoading: profileLoading, isError: profileError } = useProfile();
-  const { data: bots, isLoading: botsLoading, isError: botsError } = useBots();
+  const {
+    data: profile,
+    isLoading: profileLoading,
+    isError: profileError,
+    error: profileErrorObj,
+    refetch: refetchProfile,
+    isRefetching: isProfileRefetching,
+  } = useProfile();
+
+  const {
+    data: bots,
+    isLoading: botsLoading,
+    isError: botsError,
+    error: botsErrorObj,
+    refetch: refetchBots,
+    isRefetching: isBotsRefetching,
+  } = useBots();
 
   if (!publicKey) {
     return (
@@ -25,15 +41,17 @@ export default function ProfilePage() {
   if (profileError || botsError) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-8">
-        <p className="text-center text-gray-600 dark:text-gray-400 mb-6">
-          Failed to load profile data. Please try again.
-        </p>
-        <button
-          onClick={() => window.location.reload()}
-          className="text-gold/60 hover:text-gold transition-colors"
-        >
-          Retry
-        </button>
+        <ErrorState
+          error={profileErrorObj || botsErrorObj}
+          title="Failed to Load Profile"
+          message="Could not retrieve profile information from the Stellar network."
+          onRetry={() => {
+            refetchProfile();
+            refetchBots();
+          }}
+          isRetrying={isProfileRefetching || isBotsRefetching}
+          data-testid="profile-error-state"
+        />
       </div>
     );
   }
@@ -91,9 +109,10 @@ export default function ProfilePage() {
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          {profile.username}&apos;s Profile
+          My Profile
         </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400 font-mono text-sm">{walletAddr}</p>
+        <p className="mt-1 text-base font-medium text-gold">{profile.username}</p>
+        <p className="mt-1 text-gray-600 dark:text-gray-400 font-mono text-sm">{walletAddr}</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">

@@ -59,21 +59,24 @@ describe("types/index.ts Helpers (#239)", () => {
   describe("xlmToStroops", () => {
     it("converts 0 XLM to 0n stroops", () => {
       expect(xlmToStroops(0)).toBe(0n);
+      expect(xlmToStroops("0")).toBe(0n);
     });
 
-    it("converts 1 XLM to 1,000,000n stroops", () => {
-      expect(xlmToStroops(1)).toBe(1_000_000n);
+    it("converts 1 XLM to 10,000,000n stroops", () => {
+      expect(xlmToStroops(1)).toBe(10_000_000n);
+      expect(xlmToStroops("1")).toBe(10_000_000n);
     });
 
     it("converts fractional XLM values correctly", () => {
-      expect(xlmToStroops(0.5)).toBe(500_000n);
-      expect(xlmToStroops(0.000001)).toBe(1n);
-      expect(xlmToStroops(12.345678)).toBe(12_345_678n);
+      expect(xlmToStroops(0.5)).toBe(5_000_000n);
+      expect(xlmToStroops(0.0000001)).toBe(1n);
+      expect(xlmToStroops("0.0000001")).toBe(1n);
+      expect(xlmToStroops("12.3456789")).toBe(123_456_789n);
     });
 
     it("converts large XLM amounts to bigints without overflow", () => {
-      expect(xlmToStroops(100_000)).toBe(100_000_000_000n);
-      expect(xlmToStroops(5_000_000)).toBe(5_000_000_000_000n);
+      expect(xlmToStroops(100_000)).toBe(1_000_000_000_000n);
+      expect(xlmToStroops(5_000_000)).toBe(50_000_000_000_000n);
     });
   });
 
@@ -82,27 +85,27 @@ describe("types/index.ts Helpers (#239)", () => {
       expect(stroopsToXlm(0n)).toBe(0);
     });
 
-    it("converts 1,000,000n stroops to 1 XLM", () => {
-      expect(stroopsToXlm(1_000_000n)).toBe(1);
+    it("converts 10,000,000n stroops to 1 XLM", () => {
+      expect(stroopsToXlm(10_000_000n)).toBe(1);
     });
 
     it("converts fractional stroops to exact decimal XLM values", () => {
-      expect(stroopsToXlm(500_000n)).toBe(0.5);
-      expect(stroopsToXlm(1n)).toBe(0.000001);
-      expect(stroopsToXlm(12_345_678n)).toBe(12.345678);
+      expect(stroopsToXlm(5_000_000n)).toBe(0.5);
+      expect(stroopsToXlm(1n)).toBe(0.0000001);
+      expect(stroopsToXlm(123_456_789n)).toBe(12.3456789);
     });
 
     it("converts large bigint stroops amounts correctly", () => {
-      expect(stroopsToXlm(100_000_000_000n)).toBe(100_000);
-      expect(stroopsToXlm(5_000_000_000_000n)).toBe(5_000_000);
+      expect(stroopsToXlm(1_000_000_000_000n)).toBe(100_000);
+      expect(stroopsToXlm(50_000_000_000_000n)).toBe(5_000_000);
     });
 
     it("round-trips between XLM and stroops accurately", () => {
-      const testValues = [0, 0.000001, 0.5, 1, 5, 40, 100, 2500.5, 1000000];
+      const testValues = [0, 0.0000001, 0.5, 1, 5, 40, 100, 2500.5, 1000000];
       for (const xlm of testValues) {
         const stroops = xlmToStroops(xlm);
         const backToXlm = stroopsToXlm(stroops);
-        expect(backToXlm).toBeCloseTo(xlm, 6);
+        expect(backToXlm).toBeCloseTo(xlm, 7);
       }
     });
   });

@@ -3,10 +3,11 @@
 import { useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
-import { Trophy, RotateCw } from "lucide-react";
+import { Trophy } from "lucide-react";
 import { useLeaderboard } from "@/hooks/useLeaderboard";
 import { useWalletStore } from "@/store/walletStore";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { ErrorState } from "@/components/ui/ErrorState";
 
 // Code-split the table (framer-motion row animations) out of the route's
 // initial bundle — it's only needed once data has loaded.
@@ -16,11 +17,11 @@ const LeaderboardTable = dynamic(
 );
 
 export default function LeaderboardPage() {
-  const { data: leaderboardData, isLoading, isError, refetch, isRefetching } = useLeaderboard();
+  const { data: leaderboardData, isLoading, isError, error, refetch, isRefetching } = useLeaderboard();
   const publicKey = useWalletStore((s) => s.publicKey);
 
   // #202 — surface load failures the same way the rest of the app does
-  // (sonner toast), in addition to the existing inline error panel.
+  // (sonner toast), in addition to the inline ErrorState component.
   const hasToastedError = useRef(false);
   useEffect(() => {
     if (isError && !hasToastedError.current) {
@@ -44,9 +45,7 @@ export default function LeaderboardPage() {
         </div>
       </div>
 
-      {/* Loading state — skeleton rows matching the real table shape, per
-          the app-wide loading convention (Skeleton component), instead of
-          a generic spinner. */}
+      {/* Loading state — skeleton rows matching the real table shape */}
       {isLoading && (
         <div
           className="overflow-hidden rounded-2xl border border-liner"
@@ -71,22 +70,15 @@ export default function LeaderboardPage() {
         </div>
       )}
 
-      {/* Error state */}
+      {/* Error state with retry and network vs contract diagnosis (#513) */}
       {isError && !isLoading && (
-        <div
-          className="rounded-2xl border border-liner bg-card px-6 py-10 text-center text-muted"
+        <ErrorState
+          error={error}
+          title="Failed to Load Leaderboard"
+          onRetry={() => refetch()}
+          isRetrying={isRefetching}
           data-testid="leaderboard-error"
-        >
-          <p className="text-sm">Failed to load leaderboard. Please try again later.</p>
-          <button
-            onClick={() => refetch()}
-            disabled={isRefetching}
-            className="mt-4 inline-flex items-center gap-2 rounded-xl border border-liner px-4 py-2 text-sm font-semibold text-text hover:border-gold/50 hover:text-gold transition-colors disabled:opacity-50"
-          >
-            <RotateCw className={isRefetching ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-            {isRefetching ? "Retrying…" : "Retry"}
-          </button>
-        </div>
+        />
       )}
 
       {/* Empty state */}

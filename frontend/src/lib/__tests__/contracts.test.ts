@@ -46,9 +46,9 @@ describe("isRegistered", () => {
     );
   });
 
-  it("returns false when the simulation throws", async () => {
+  it("throws when the simulation throws (AM-143)", async () => {
     mockSimulate.mockRejectedValue(new Error("rpc down"));
-    await expect(isRegistered("GUSER")).resolves.toBe(false);
+    await expect(isRegistered("GUSER")).rejects.toThrow("rpc down");
   });
 });
 
@@ -64,9 +64,9 @@ describe("getTotalUsers", () => {
     );
   });
 
-  it("returns 0 when the simulation throws", async () => {
+  it("throws when the simulation throws (AM-143)", async () => {
     mockSimulate.mockRejectedValue(new Error("rpc down"));
-    await expect(getTotalUsers("GSRC")).resolves.toBe(0);
+    await expect(getTotalUsers("GSRC")).rejects.toThrow("rpc down");
   });
 });
 
@@ -77,9 +77,9 @@ describe("getUserProfile", () => {
     expect(profile).toEqual({ username: "Alice", points: 350n });
   });
 
-  it("returns null when the simulation throws", async () => {
-    mockSimulate.mockRejectedValue(new Error("not registered"));
-    await expect(getUserProfile("GUSER")).resolves.toBeNull();
+  it("throws when the simulation throws (AM-143)", async () => {
+    mockSimulate.mockRejectedValue(new Error("rpc down"));
+    await expect(getUserProfile("GUSER")).rejects.toThrow("rpc down");
   });
 });
 
@@ -96,8 +96,8 @@ describe("getLeaderboard", () => {
     ]);
   });
 
-  it("returns an empty array on error", async () => {
+  it("throws on error so React Query captures isError (AM-143)", async () => {
     mockSimulate.mockRejectedValue(new Error("boom"));
-    await expect(getLeaderboard(10, "GSRC")).resolves.toEqual([]);
+    await expect(getLeaderboard(10, "GSRC")).rejects.toThrow("boom");
   });
 });
