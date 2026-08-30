@@ -49,7 +49,21 @@ Thank you for contributing to AutoMint! This codebase is built through open-sour
    cd frontend && npm run lint
    ```
 
-7. **Submit Pull Request**:
+7. **Dependency Management**:
+   AutoMint pins `soroban-sdk` to an exact patch version and disables its default
+   features so production wasm stays lean and reproducible — see
+   `docs/DEPENDENCIES.md`. Before bumping any dependency, review the diff:
+
+   ```bash
+   make deps-check    # `cargo update --dry-run` — prints bumps without touching Cargo.lock
+   ```
+
+   The `dependency-check` CI workflow runs this dry-run on every PR and uploads
+   the result as an artifact, so silent version bumps never land unreviewed.
+   After a reviewed bump, re-record each contract's `wasm_hash` in the deployment
+   manifest (`deployments/<network>.json`).
+
+8. **Submit Pull Request**:
    Open a PR **targeting the `main` branch**. Title it after the issue and include `Closes #<issue-number>` in the PR description.
 
 ---
