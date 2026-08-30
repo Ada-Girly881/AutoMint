@@ -25,28 +25,6 @@ const publicEnv = [
 const nextConfig = {
   reactStrictMode: true,
   env: publicEnv,
-  images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "assets.stellar.org",
-      },
-      {
-        protocol: "https",
-        hostname: "ipfs.io",
-        pathname: "/ipfs/**",
-      },
-      {
-        protocol: "https",
-        hostname: "cloudflare-ipfs.com",
-        pathname: "/ipfs/**",
-      },
-      {
-        protocol: "https",
-        hostname: "raw.githubusercontent.com",
-      },
-    ],
-  },
   webpack: (config) => {
     // Required for @stellar/stellar-sdk in browser
     config.resolve.fallback = {

@@ -17,21 +17,69 @@ import ClaimButton from "@/components/dashboard/ClaimButton";
 import BotCard from "@/components/dashboard/BotCard";
 import RegistrationBanner from "@/components/dashboard/RegistrationBanner";
 import UpgradePrompt from "@/components/dashboard/UpgradePrompt";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { Wallet, Loader2, Bot } from "lucide-react";
 import clsx from "clsx";
 import type { BotNFT } from "@/types";
 
 export default function DashboardPage() {
   const { publicKey, isConnected, connect, isConnecting } = useWallet();
-  const { data: isRegistered, isLoading: isCheckingRegistration } = useRegistered();
-  const { data: profile } = useProfile();
-  const { data: botIds } = useBots();
-  const { data: accrualState } = useAccrualState();
-  const { data: bots } = useAllBotDetails(botIds || []);
+  const {
+    data: isRegistered,
+    isLoading: isCheckingRegistration,
+    isError: isRegError,
+    error: regError,
+    refetch: refetchReg,
+    isRefetching: isRegRefetching,
+  } = useRegistered();
+
+  const {
+    data: profile,
+    isError: isProfileError,
+    error: profileError,
+    refetch: refetchProfile,
+    isRefetching: isProfileRefetching,
+  } = useProfile();
+
+  const {
+    data: botIds,
+    isError: isBotsError,
+    error: botsError,
+    refetch: refetchBots,
+    isRefetching: isBotsRefetching,
+  } = useBots();
+
+  const {
+    data: accrualState,
+    isError: isAccrualError,
+    error: accrualError,
+    refetch: refetchAccrual,
+  } = useAccrualState();
+
+  const {
+    data: bots,
+    isError: isBotsDetailsError,
+    error: botsDetailsError,
+    refetch: refetchBotsDetails,
+    isRefetching: isBotsDetailsRefetching,
+  } = useAllBotDetails(botIds || []);
+
   const { data: amtBalance } = useAmtBalance();
   const claim = useClaim();
 
   const [pendingPoints, setPendingPoints] = useState<bigint>(BigInt(0));
+
+  const isAnyError = isRegError || isProfileError || isBotsError || isAccrualError || isBotsDetailsError;
+  const activeError = regError || profileError || botsError || accrualError || botsDetailsError;
+  const isRetrying = isRegRefetching || isProfileRefetching || isBotsRefetching || isBotsDetailsRefetching;
+
+  const handleRetryAll = () => {
+    refetchReg();
+    refetchProfile();
+    refetchBots();
+    refetchAccrual();
+    refetchBotsDetails();
+  };
 
   // Calculate total accrual rate from bots
   const totalRate =
@@ -111,6 +159,22 @@ export default function DashboardPage() {
     );
   }
 
+  // Error state for registration or initial query failures (#513)
+  if (isRegError) {
+    return (
+      <div className="mx-auto max-w-7xl px-6 py-8">
+        <ErrorState
+          error={regError}
+          title="Failed to Load Account Status"
+          message="Could not verify your registration status with the Soroban registry contract."
+          onRetry={handleRetryAll}
+          isRetrying={isRetrying}
+          data-testid="dashboard-error-state"
+        />
+      </div>
+    );
+  }
+
   // Not registered state
   if (!isRegistered) {
     return (
@@ -128,7 +192,7 @@ export default function DashboardPage() {
     );
   }
 
-  // Registered state - show dashboard
+  // Registered state - show dashboard with error handling for sub-queries
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
       <div className="mb-8">
@@ -139,6 +203,20 @@ export default function DashboardPage() {
           Track your points and manage your AI bot collection.
         </p>
       </div>
+
+      {isAnyError && (
+        <div className="mb-6">
+          <ErrorState
+            error={activeError}
+            title="Partial Data Outage"
+            message="Some dashboard metrics could not be synchronized with the Stellar network."
+            onRetry={handleRetryAll}
+            isRetrying={isRetrying}
+            compact
+            data-testid="dashboard-suberror-state"
+          />
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Left column */}
@@ -171,7 +249,20 @@ export default function DashboardPage() {
             <span className="text-sm text-muted">{bots?.length || 0} owned</span>
           </div>
 
-          {bots && bots.length > 0 ? (
+          {isBotsError || isBotsDetailsError ? (
+            <ErrorState
+              error={botsError || botsDetailsError}
+              title="Failed to Load Bots"
+              message="Could not retrieve your NFT bots from the contract."
+              onRetry={() => {
+                refetchBots();
+                refetchBotsDetails();
+              }}
+              isRetrying={isBotsRefetching || isBotsDetailsRefetching}
+              compact
+              data-testid="bots-error-state"
+            />
+          ) : bots && bots.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2">
               {bots.map((bot: BotNFT) => (
                 <BotCard key={bot.id.toString()} bot={bot} />

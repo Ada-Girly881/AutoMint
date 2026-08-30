@@ -1,6 +1,7 @@
 "use client";
 
 import { Skeleton } from "@/components/ui/Skeleton";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { useWalletStore } from "@/store/walletStore";
 import { useListings } from "@/hooks/useMarketplace";
 import BotListingCard from "@/components/marketplace/BotListingCard";
@@ -8,7 +9,7 @@ import { toast } from "sonner";
 
 export default function MarketplacePage() {
   const publicKey = useWalletStore((s) => s.publicKey);
-  const { data: listings, isLoading, isError } = useListings();
+  const { data: listings, isLoading, isError, error, refetch, isRefetching } = useListings();
 
   if (isLoading) {
     return (
@@ -27,15 +28,14 @@ export default function MarketplacePage() {
   if (isError) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-8">
-        <p className="text-center text-gray-600 dark:text-gray-400 mb-6">
-          Failed to load listings. Please try again later.
-        </p>
-        <button
-          onClick={() => window.location.reload()}
-          className="text-gold/60 hover:text-gold transition-colors"
-        >
-          Retry
-        </button>
+        <ErrorState
+          error={error}
+          title="Failed to Load Marketplace Listings"
+          message="Could not fetch active listings from the Soroban marketplace contract."
+          onRetry={() => refetch()}
+          isRetrying={isRefetching}
+          data-testid="marketplace-error-state"
+        />
       </div>
     );
   }
@@ -73,8 +73,6 @@ export default function MarketplacePage() {
       </h1>
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {listings.map((listing) => {
-          // In a full implementation, we'd fetch bot data for each listing
-          // For now, render with placeholder bot data
           return (
             <BotListingCard
               key={listing.id}

@@ -172,18 +172,14 @@ export async function getLeaderboard(
   limit: number = 50,
   sourceAddress?: string
 ): Promise<UserProfile[]> {
-  try {
-    const raw = await simulateContractCall(
-      REGISTRY_CONTRACT_ID,
-      "get_leaderboard",
-      [nativeToScVal(limit, { type: "u32" })],
-      defaultSource(sourceAddress)
-    );
-    if (!Array.isArray(raw)) return [];
-    return raw.map((entry: Record<string, unknown>) => parseUserProfile(entry));
-  } catch {
-    return [];
-  }
+  const raw = await simulateContractCall(
+    REGISTRY_CONTRACT_ID,
+    "get_leaderboard",
+    [nativeToScVal(limit, { type: "u32" })],
+    defaultSource(sourceAddress)
+  );
+  if (!Array.isArray(raw)) return [];
+  return raw.map((entry: Record<string, unknown>) => parseUserProfile(entry));
 }
 
 /**
@@ -227,21 +223,17 @@ export async function getActiveListings(
   limit: number = 100,
   sourceAddress?: string
 ): Promise<MarketplaceListing[]> {
-  try {
-    const listingsRaw = await simulateContractCall(
-      MARKETPLACE_CONTRACT_ID,
-      "get_active_listings",
-      [
-        nativeToScVal(start, { type: "u64" }),
-        nativeToScVal(limit, { type: "u32" }),
-      ],
-      defaultSource(sourceAddress)
-    );
-    if (!Array.isArray(listingsRaw)) return [];
-    return listingsRaw.map((listing: Record<string, unknown>) => parseListing(listing));
-  } catch {
-    return [];
-  }
+  const listingsRaw = await simulateContractCall(
+    MARKETPLACE_CONTRACT_ID,
+    "get_active_listings",
+    [
+      nativeToScVal(start, { type: "u64" }),
+      nativeToScVal(limit, { type: "u32" }),
+    ],
+    defaultSource(sourceAddress)
+  );
+  if (!Array.isArray(listingsRaw)) return [];
+  return listingsRaw.map((listing: Record<string, unknown>) => parseListing(listing));
 }
 
 /**
@@ -251,18 +243,14 @@ export async function getActiveListings(
 export async function getUserListings(
   userAddress: string
 ): Promise<MarketplaceListing[]> {
-  try {
-    const listingsRaw = await simulateContractCall(
-      MARKETPLACE_CONTRACT_ID,
-      "get_user_listings",
-      [nativeToScVal(userAddress, { type: "address" })],
-      userAddress
-    );
-    if (!Array.isArray(listingsRaw)) return [];
-    return listingsRaw.map((listing: Record<string, unknown>) => parseListing(listing));
-  } catch {
-    return [];
-  }
+  const listingsRaw = await simulateContractCall(
+    MARKETPLACE_CONTRACT_ID,
+    "get_user_listings",
+    [nativeToScVal(userAddress, { type: "address" })],
+    userAddress
+  );
+  if (!Array.isArray(listingsRaw)) return [];
+  return listingsRaw.map((listing: Record<string, unknown>) => parseListing(listing));
 }
 
 /**
@@ -270,17 +258,13 @@ export async function getUserListings(
  * Read-only simulation of the registry's `is_registered` method.
  */
 export async function isRegistered(userAddress: string): Promise<boolean> {
-  try {
-    const result = await simulateContractCall(
-      REGISTRY_CONTRACT_ID,
-      "is_registered",
-      [nativeToScVal(userAddress, { type: "address" })],
-      userAddress
-    );
-    return Boolean(result);
-  } catch {
-    return false;
-  }
+  const result = await simulateContractCall(
+    REGISTRY_CONTRACT_ID,
+    "is_registered",
+    [nativeToScVal(userAddress, { type: "address" })],
+    userAddress
+  );
+  return Boolean(result);
 }
 
 /**
@@ -288,17 +272,13 @@ export async function isRegistered(userAddress: string): Promise<boolean> {
  * Read-only simulation of the registry's `total_users` method.
  */
 export async function getTotalUsers(sourceAddress?: string): Promise<number> {
-  try {
-    const result = await simulateContractCall(
-      REGISTRY_CONTRACT_ID,
-      "total_users",
-      [],
-      defaultSource(sourceAddress)
-    );
-    return Number(result ?? 0);
-  } catch {
-    return 0;
-  }
+  const result = await simulateContractCall(
+    REGISTRY_CONTRACT_ID,
+    "total_users",
+    [],
+    defaultSource(sourceAddress)
+  );
+  return Number(result ?? 0);
 }
 
 /**
@@ -348,23 +328,19 @@ export async function startAccrual(userAddress: string, rate: number): Promise<s
  * Get accrual state for a user from the accrual contract.
  */
 export async function getAccrualState(userAddress: string): Promise<AccrualState | null> {
-  try {
-    const stateRaw = (await simulateContractCall(
-      ACCRUAL_CONTRACT_ID,
-      "get_accrual_state",
-      [nativeToScVal(userAddress, { type: "address" })],
-      userAddress
-    )) as Record<string, unknown> | null;
+  const stateRaw = (await simulateContractCall(
+    ACCRUAL_CONTRACT_ID,
+    "get_accrual_state",
+    [nativeToScVal(userAddress, { type: "address" })],
+    userAddress
+  )) as Record<string, unknown> | null;
 
-    if (!stateRaw) return null;
+  if (!stateRaw) return null;
 
-    return {
-      last_claim_ts: toBigInt(stateRaw.last_claim_ts),
-      total_claimed_points: toBigInt(stateRaw.total_claimed_points),
-    };
-  } catch {
-    return null;
-  }
+  return {
+    last_claim_ts: toBigInt(stateRaw.last_claim_ts),
+    total_claimed_points: toBigInt(stateRaw.total_claimed_points),
+  };
 }
 
 /**
@@ -386,7 +362,7 @@ export async function getPendingPoints(userAddress: string): Promise<bigint> {
   const result = await withRetry(() => server.simulateTransaction(tx));
 
   if (SorobanRpc.Api.isSimulationError(result)) {
-    return BigInt(0);
+    throw new Error(`Simulation error fetching pending points: ${result.error}`);
   }
 
   if (!result.result?.retval) {
@@ -417,19 +393,15 @@ export async function claimPoints(userAddress: string): Promise<string> {
  * Get user profile from the registry contract.
  */
 export async function getUserProfile(userAddress: string): Promise<UserProfile | null> {
-  try {
-    const profileRaw = (await simulateContractCall(
-      REGISTRY_CONTRACT_ID,
-      "get_user",
-      [nativeToScVal(userAddress, { type: "address" })],
-      userAddress
-    )) as Record<string, unknown> | null;
+  const profileRaw = (await simulateContractCall(
+    REGISTRY_CONTRACT_ID,
+    "get_user",
+    [nativeToScVal(userAddress, { type: "address" })],
+    userAddress
+  )) as Record<string, unknown> | null;
 
-    if (!profileRaw) return null;
-    return parseUserProfile(profileRaw);
-  } catch {
-    return null;
-  }
+  if (!profileRaw) return null;
+  return parseUserProfile(profileRaw);
 }
 
 /**
@@ -450,7 +422,7 @@ export async function getUserBots(userAddress: string): Promise<bigint[]> {
   const result = await withRetry(() => server.simulateTransaction(tx));
 
   if (SorobanRpc.Api.isSimulationError(result)) {
-    return [];
+    throw new Error(`Simulation error fetching user bots: ${result.error}`);
   }
 
   if (!result.result?.retval) {
@@ -484,7 +456,7 @@ export async function getBotById(
   const result = await withRetry(() => server.simulateTransaction(tx));
 
   if (SorobanRpc.Api.isSimulationError(result)) {
-    return null;
+    throw new Error(`Simulation error fetching bot #${botId.toString()}: ${result.error}`);
   }
 
   if (!result.result?.retval) {
@@ -516,7 +488,7 @@ export async function getUserTotalRate(userAddress: string): Promise<bigint> {
   const result = await withRetry(() => server.simulateTransaction(tx));
 
   if (SorobanRpc.Api.isSimulationError(result)) {
-    return BigInt(0);
+    throw new Error(`Simulation error fetching user total rate: ${result.error}`);
   }
 
   if (!result.result?.retval) {

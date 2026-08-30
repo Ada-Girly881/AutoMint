@@ -92,10 +92,46 @@ export function formatPoints(points: bigint): string {
   return Number(points).toLocaleString("en-US");
 }
 
-export function xlmToStroops(xlm: number): bigint {
-  return BigInt(Math.round(xlm * 1_000_000));
+export const XLM_DECIMALS = 7;
+export const STROOPS_PER_XLM = 10_000_000n;
+
+export function xlmToStroops(xlm: number | string): bigint {
+  if (typeof xlm === "string") {
+    const trimmed = xlm.trim();
+    if (!trimmed || isNaN(Number(trimmed))) return 0n;
+    const parts = trimmed.split(".");
+    const integerPart = parts[0] ? BigInt(parts[0]) : 0n;
+    let fractionStr = parts[1] || "";
+    if (fractionStr.length > XLM_DECIMALS) {
+      fractionStr = fractionStr.slice(0, XLM_DECIMALS);
+    } else {
+      fractionStr = fractionStr.padEnd(XLM_DECIMALS, "0");
+    }
+    const sign = integerPart < 0n || trimmed.startsWith("-") ? -1n : 1n;
+    const absInt = integerPart < 0n ? -integerPart : integerPart;
+    const fractionPart = BigInt(fractionStr);
+    return sign * (absInt * STROOPS_PER_XLM + fractionPart);
+  }
+  if (typeof xlm === "number") {
+    if (isNaN(xlm) || !isFinite(xlm)) return 0n;
+    return BigInt(Math.round(xlm * 10_000_000));
+  }
+  return 0n;
 }
 
 export function stroopsToXlm(stroops: bigint): number {
-  return Number(stroops) / 1_000_000;
+  return Number(stroops) / 10_000_000;
 }
+
+export function stroopsToXlmString(stroops: bigint): string {
+  const isNegative = stroops < 0n;
+  const absStroops = isNegative ? -stroops : stroops;
+  const intPart = absStroops / STROOPS_PER_XLM;
+  const fracPart = absStroops % STROOPS_PER_XLM;
+  if (fracPart === 0n) {
+    return `${isNegative ? "-" : ""}${intPart.toString()}`;
+  }
+  const fracStr = fracPart.toString().padStart(XLM_DECIMALS, "0").replace(/0+$/, "");
+  return `${isNegative ? "-" : ""}${intPart.toString()}.${fracStr}`;
+}
+
