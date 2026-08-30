@@ -88,11 +88,19 @@ function LeaderboardTableComponent({ users, currentAddress }: LeaderboardTablePr
                   isCurrentUser ? "bg-gold/5 border-l-2 border-l-gold" : "hover:bg-white/[0.02]",
                 )}
               >
-                {/* Rank */}
+                {/* Rank — colour and emoji are never the only signal: the
+                    medal glyph is decorative (aria-hidden) with an sr-only
+                    label, and a visible numeric rank sits alongside it so
+                    the position is identifiable in greyscale. */}
                 <td className="px-2 py-3 font-bold sm:px-4">
                   {rankMeta ? (
-                    <span className={clsx("text-base", rankMeta.color)}>
-                      <span aria-hidden="true">{rankMeta.icon}</span>
+                    <span className={clsx("inline-flex items-center gap-1.5", rankMeta.color)}>
+                      <span aria-hidden="true" className="text-base leading-none">
+                        {rankMeta.icon}
+                      </span>
+                      <span aria-hidden="true" className="text-sm font-bold text-text">
+                        {user.rank}
+                      </span>
                       <span className="sr-only">{rankMeta.label}</span>
                     </span>
                   ) : (

@@ -1,6 +1,9 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import { axe, toHaveNoViolations } from 'jest-axe';
 import { LeaderboardTable } from '../components/leaderboard/LeaderboardTable';
+
+expect.extend(toHaveNoViolations);
 
 jest.mock('framer-motion', () => ({
   motion: {
@@ -46,6 +49,32 @@ describe('LeaderboardTable Component', () => {
     expect(screen.getByText('2nd place')).toBeInTheDocument();
     // Rank 5 shows numeric rank
     expect(screen.getByText('#5')).toBeInTheDocument();
+  });
+
+  describe('rank is not conveyed by emoji/colour alone (#527)', () => {
+    it('shows a visible numeric rank next to the medal for the top 3', () => {
+      render(<LeaderboardTable users={mockUsers} />);
+      const row1 = within(screen.getByTestId('user-row-1'));
+      // greyscale-safe: the position is readable as a number, not just a medal
+      expect(row1.getByText('1')).toBeInTheDocument();
+      const row2 = within(screen.getByTestId('user-row-2'));
+      expect(row2.getByText('2')).toBeInTheDocument();
+    });
+
+    it('hides the decorative medal glyph from the accessibility tree and labels it', () => {
+      render(<LeaderboardTable users={mockUsers.slice(0, 1)} />);
+      const row1 = within(screen.getByTestId('user-row-1'));
+      expect(row1.getByText('🥇')).toHaveAttribute('aria-hidden', 'true');
+      // adjacent accessible name for screen readers
+      expect(row1.getByText('1st place')).toHaveClass('sr-only');
+    });
+
+    it('has no axe-detectable accessibility violations', async () => {
+      const { container } = render(
+        <LeaderboardTable users={mockUsers} currentAddress={mockUsers[0].address} />,
+      );
+      expect(await axe(container)).toHaveNoViolations();
+    });
   });
 
   it('truncates long addresses and displays correctly', () => {
