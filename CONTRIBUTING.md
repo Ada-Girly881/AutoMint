@@ -15,6 +15,7 @@ Thank you for contributing to AutoMint! This codebase is built through open-sour
 2. **Claim the Issue**: Comment `"I'll take this"` on the issue and wait for it to be assigned to you before starting work.
 
 3. **Branch from `main`**:
+
    ```bash
    git checkout main
    git pull origin main
@@ -27,9 +28,16 @@ Thank you for contributing to AutoMint! This codebase is built through open-sour
 
 6. **Local Verification**:
    Run the full verification suite locally before opening a pull request:
+
    ```bash
-   # Rust Smart Contracts
+   # Rust Smart Contracts - Test Suite
    cargo test --workspace
+
+   # Rust Smart Contracts - Format Check
+   cargo fmt --check --all
+
+   # Rust Smart Contracts - Linter
+   cargo clippy --all-targets --all-features -- -D warnings
 
    # Frontend Unit & Component Tests
    cd frontend && npm test
@@ -49,6 +57,7 @@ Thank you for contributing to AutoMint! This codebase is built through open-sour
 ## Pre-Commit Hook
 
 Enable the repository pre-commit hook to catch formatting and lint issues automatically:
+
 ```bash
 git config core.hooksPath .githooks
 ```
@@ -57,14 +66,14 @@ git config core.hooksPath .githooks
 
 ## Code Style & Enforcement Mechanisms
 
-| Rule | Area | Enforcement Mechanism |
-|---|---|---|
-| Code Formatting (`rustfmt`) | Rust | **Machine-enforced in CI** (`cargo fmt --check`) |
-| Compiler Lints | Rust | **Machine-enforced in CI** (`cargo clippy -- -D warnings`) |
-| No Panics on User Input | Rust | **Review-only** *(Automated clippy lint enforcement landing in AM-223)* |
-| Static Type Safety | TypeScript | **Machine-enforced in CI** (`npm run type-check`) |
-| Code Linting | TypeScript | **Machine-enforced in CI** (`npm run lint`) |
-| No `any` Types | TypeScript | **Review-only** *(ESLint rule enforcement landing in AM-223)* |
+| Rule                        | Area       | Enforcement Mechanism                                                   |
+| --------------------------- | ---------- | ----------------------------------------------------------------------- |
+| Code Formatting (`rustfmt`) | Rust       | **Machine-enforced in CI** (`cargo fmt --check`)                        |
+| Compiler Lints              | Rust       | **Machine-enforced in CI** (`cargo clippy -- -D warnings`)              |
+| No Panics on User Input     | Rust       | **Review-only** _(Automated clippy lint enforcement landing in AM-223)_ |
+| Static Type Safety          | TypeScript | **Machine-enforced in CI** (`npm run type-check`)                       |
+| Code Linting                | TypeScript | **Machine-enforced in CI** (`npm run lint`)                             |
+| No `any` Types              | TypeScript | **Review-only** _(ESLint rule enforcement landing in AM-223)_           |
 
 ---
 

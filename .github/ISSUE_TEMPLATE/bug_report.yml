@@ -1,12 +1,14 @@
 name: Bug Report
-description: Create a bug report to help us fix issues and improve AutoMint
+description: Report bugs found during testnet implementation build-out
 title: "[Bug]: "
 labels: ["type:bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thank you for reporting a bug! Please fill out the form below as completely as possible.
+        Thank you for reporting a bug! This template is for issues found during the testnet implementation phase.
+
+        **Note**: This bug report will be tracked against the `testnet-implementation` branch.
 
   - type: textarea
     id: bug-description
@@ -42,7 +44,8 @@ body:
     id: actual-behavior
     attributes:
       label: Actual Behavior / Screenshots
-      description: Describe what actually happened, including error logs or screenshots if applicable.
+      description: Describe what actually happened, including error logs, screenshots, or transaction IDs.
+      placeholder: Include testnet transaction hashes if applicable
     validations:
       required: false
 
@@ -59,11 +62,35 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: contract
+    attributes:
+      label: Contract (if applicable)
+      description: Which contract is affected?
+      options:
+        - "Not applicable"
+        - "contract:registry"
+        - "contract:bot_nft"
+        - "contract:accrual"
+        - "contract:marketplace"
+        - "contract:token"
+    validations:
+      required: false
+
   - type: input
     id: environment
     attributes:
       label: Environment Details
-      description: OS version, Node version, Freighter extension version, Rust version, etc.
-      placeholder: e.g. macOS 14.5, Node v18.20.0, Chrome 125, Freighter v5.8.0
+      description: OS, Node version, Freighter version, Rust version, testnet network details
+      placeholder: e.g. macOS 14.5, Node v18.20.0, Chrome 125, Freighter v5.8.0, Soroban testnet
+    validations:
+      required: false
+
+  - type: input
+    id: testnet-account
+    attributes:
+      label: Testnet Account (optional)
+      description: Your testnet account address for reproduction (DO NOT use mainnet addresses)
+      placeholder: G... (testnet address only)
     validations:
       required: false

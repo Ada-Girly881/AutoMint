@@ -21,10 +21,12 @@ Closes #<!-- issue number -->
 
 Please verify each of the following before submitting:
 
-- [ ] **Target Branch**: This PR targets the `main` branch.
+- [ ] **Target Branch**: This PR targets the `testnet-implementation` branch (not `main`).
 - [ ] **Linked Issue**: The PR description includes `Closes #<issue-number>` referencing an assigned issue.
 - [ ] **Local Verification**:
-  - [ ] Smart contracts pass: `cargo test --workspace`
+  - [ ] Smart contracts test suite passes: `cargo test --workspace`
+  - [ ] Smart contracts format check passes: `cargo fmt --check --all`
+  - [ ] Smart contracts linter passes: `cargo clippy --all-targets --all-features -- -D warnings`
   - [ ] Frontend tests pass: `cd frontend && npm test`
   - [ ] TypeScript check passes: `cd frontend && npm run type-check`
   - [ ] Linting passes: `cd frontend && npm run lint`
@@ -36,4 +38,10 @@ Please verify each of the following before submitting:
 
 ### Contract Behaviour Changes (if applicable)
 
-*If this PR modifies Rust smart contracts, detail state, auth, or interface changes here:*
+_If this PR modifies Rust smart contracts, detail state, auth, or interface changes here:_
+
+---
+
+### Deployment Notes (if applicable)
+
+_If this PR requires testnet deployment steps, migration scripts, or configuration changes, document them here:_
