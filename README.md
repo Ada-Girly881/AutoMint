@@ -91,7 +91,10 @@ AutoMint/
 │   ├── src/store/              # Zustand wallet store
 │   └── src/types/              # Shared TypeScript domain interfaces
 ├── docs/                       # Project Documentation
-│   ├── architecture.md         # Call graphs, auth matrix, storage layout & events (#566)
+│   ├── ARCHITECTURE.md         # Call graphs, auth matrix, storage layout & events (#212, #566)
+│   ├── DEPLOY.md               # Contract deployment runbook: keys, deploy.sh, verification (#217)
+│   ├── DEPLOYMENT.md           # Frontend hosting, env vars & CI preview deployments
+│   ├── MANUAL_TEST_REPORT.md   # Testnet end-to-end manual verification checklists
 │   ├── ONBOARDING.md           # Developer codebase reading order guide (#250)
 │   └── FLOWS.md                # Sequence flows for core user journeys
 ├── scripts/                    # Build & Deployment Automation
@@ -194,10 +197,12 @@ Automated CI Workflows:
 
 ## Documentation Links
 
-- [Contract Architecture Specification](docs/architecture.md) (`docs/architecture.md`)
+- [Contract Architecture Specification](docs/ARCHITECTURE.md) (`docs/ARCHITECTURE.md`)
+- [Contract Deployment Runbook](docs/DEPLOY.md) (`docs/DEPLOY.md`)
 - [Developer Onboarding Guide](docs/ONBOARDING.md) (`docs/ONBOARDING.md`)
 - [Sequence & Journey Flows](docs/FLOWS.md) (`docs/FLOWS.md`)
-- [Deployment & CI Preview Documentation](docs/DEPLOYMENT.md) (`docs/DEPLOYMENT.md`)
+- [Frontend Deployment & CI Preview Documentation](docs/DEPLOYMENT.md) (`docs/DEPLOYMENT.md`)
+- [Testnet Manual Test Report](docs/MANUAL_TEST_REPORT.md) (`docs/MANUAL_TEST_REPORT.md`)
 - [Project Changelog](CHANGELOG.md) (`CHANGELOG.md`)
 
 ---

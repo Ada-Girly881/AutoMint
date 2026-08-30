@@ -14,6 +14,20 @@ The AutoMint architecture comprises five Soroban smart contracts interacting via
 - **Marketplace (`automint_marketplace`)**: Non-custodial escrow marketplace for trading Bot NFTs using AMT or XLM tokens.
 - **AMT Token (`automint_token`)**: SEP-41 compliant token contract representing the `$AMT` asset.
 
+### Contract Responsibilities & Outbound Dependencies
+
+| Contract | Crate / WASM | Owns | Calls Out To | Called By |
+|---|---|---|---|---|
+| Registry | `automint_registry` | User profiles, username uniqueness, point totals, claimed `$AMT` tally, bot counts, leaderboard ordering | *(none — leaf contract)* | BotNFT, Accrual, frontend |
+| BotNFT | `automint_bot_nft` | Bot NFT records, tier table, ownership index, accrual-rate lookup | Registry (`increment_bot_count`), Token (`transfer` for paid tiers) | Marketplace, frontend |
+| Accrual | `automint_accrual` | Per-user accrual state, elapsed-time point math, points→`$AMT` conversion | Registry (`add_points`, `add_claimed_amt`), Token (`mint`) | Frontend |
+| Marketplace | `automint_marketplace` | Listings, escrow custody, 2.5% fee split | BotNFT (`get_bot`, `transfer`), Token (`transfer`) | Frontend |
+| AMT Token | `automint_token` | Balances, allowances, SEP-41 surface | *(none — leaf contract)* | BotNFT, Accrual, Marketplace, frontend |
+
+Two contracts are **leaves** (Registry and Token: they never make outbound cross-contract calls), and the dependency graph is acyclic. Registry and Token are therefore deployed first in dependency terms, and every other contract holds an address pointing at what it needs. Cross-contract calls are made through generated clients — `BotNFTContractClient`, `RegistryContractClient`, and `soroban_sdk::token::Client` — and the callers deliberately use the `try_*` variants so a downstream failure surfaces as a typed error rather than trapping the whole transaction.
+
+**Address wiring.** Only two dependencies are stored on-chain at initialization: BotNFT holds `Registry`, and Marketplace holds `bot_nft` inside its `Config`. Every other dependency is passed in per call — Accrual takes `token_contract` and `registry` as `claim` arguments, BotNFT takes `token` as a `mint_tier` argument, and Marketplace reads the payment token from `listing.currency`. This keeps the deployment order flexible but means the **frontend is responsible for passing the correct contract IDs**; a wrong address is a per-transaction failure, not a deploy-time one.
+
 ### Cross-Contract Call Flow
 
 ```mermaid
@@ -94,6 +108,18 @@ sequenceDiagram
     Marketplace->>Token: try_transfer(buyer, admin, fee)
     Marketplace-->>Buyer: Ok(())
 ```
+
+### Ordering & Failure Semantics of `buy_bot`
+
+`Marketplace::buy_bot` performs three cross-contract calls in a deliberate order, and the ordering is a documented trade-off rather than an accident:
+
+1. **NFT transfer first** (`BotNFT::try_transfer` escrow → buyer). If this fails, the call aborts with `BotTransferFailed` and no funds have moved.
+2. **Seller payment second** (`Token::try_transfer` buyer → seller, `price - fee`). If this fails, the call returns `PaymentFailed` and the whole transaction reverts, so the NFT transfer in step 1 is rolled back with it.
+3. **Admin fee last** (`Token::try_transfer` buyer → admin, 2.5%). This result is **intentionally discarded** — a failing fee transfer does not abort a purchase that has otherwise settled correctly between buyer and seller.
+
+The guard rails around this path: `buyer == listing.seller` is rejected with `Unauthorized`, an inactive listing is rejected with `ListingNotActive`, and the fee arithmetic uses `checked_mul`/`checked_div`/`checked_sub` so an extreme listing price returns `Overflow` instead of panicking. On success the listing is flagged `active: false` and removed from the `ActiveListings` index before the `bought` event is published.
+
+Note that `buy_bot` does **not** call Registry: bot counts are not rebalanced between seller and buyer on a marketplace sale. `Registry::decrement_bot_count` exists and is user-authorized, but no contract invokes it as part of the purchase flow.
 
 ---
 
@@ -249,7 +275,7 @@ Soroban provides three storage tiers: **Instance**, **Persistent**, and **Tempor
 
 ## 5. Deployment Wiring Order
 
-Deployment must follow the exact sequence implemented in [`scripts/deploy.sh`](file:///Users/macosbigsur/Documents/Code/AutoMint/scripts/deploy.sh) to satisfy cross-contract initialization dependencies:
+Deployment must follow the exact sequence implemented in [`scripts/deploy.sh`](../scripts/deploy.sh) to satisfy cross-contract initialization dependencies. For the operator-facing runbook (key generation, funding, verification, `.env.local`), see [`DEPLOY.md`](./DEPLOY.md).
 
 ```mermaid
 flowchart TD
