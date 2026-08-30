@@ -613,7 +613,12 @@ mod auth_tests {
             invoke: &MockAuthInvoke {
                 contract: &h.mkt.address,
                 fn_name: "list_bot",
-                args: (seller.clone(), bot_id, 50_0000000_i128, h.token.address.clone())
+                args: (
+                    seller.clone(),
+                    bot_id,
+                    50_0000000_i128,
+                    h.token.address.clone(),
+                )
                     .into_val(&h.env),
                 sub_invokes: &[MockAuthInvoke {
                     contract: &h.bot.address,

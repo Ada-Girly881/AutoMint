@@ -76,9 +76,14 @@ impl MarketplaceContract {
             return Err(MarketplaceError::AlreadyInitialized);
         }
         admin.require_auth();
-        env.storage()
-            .instance()
-            .set(&DataKey::Config, &Config { admin, bot_nft, fee_bps });
+        env.storage().instance().set(
+            &DataKey::Config,
+            &Config {
+                admin,
+                bot_nft,
+                fee_bps,
+            },
+        );
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::NextListingId, &1u64);
         env.storage()
@@ -449,7 +454,6 @@ impl MarketplaceContract {
         );
         Ok(())
     }
-
 }
 
 #[cfg(test)]

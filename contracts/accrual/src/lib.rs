@@ -37,8 +37,6 @@ fn read_accrual_state(env: &Env, user: &Address) -> Option<AccrualState> {
         })
 }
 
-
-
 #[derive(Clone)]
 #[contracttype]
 pub struct UserAccrual {
@@ -67,11 +65,7 @@ pub struct AccrualContract;
 
 #[contractimpl]
 impl AccrualContract {
-    pub fn initialize(
-        env: Env,
-        admin: Address,
-        points_per_amt: u64,
-    ) -> Result<(), AccrualError> {
+    pub fn initialize(env: Env, admin: Address, points_per_amt: u64) -> Result<(), AccrualError> {
         if env.storage().instance().has(&DataKey::Initialized) {
             return Err(AccrualError::AlreadyInitialized);
         }
@@ -82,17 +76,13 @@ impl AccrualContract {
 
         admin.require_auth();
 
-        env.storage()
-            .instance()
-            .set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Admin, &admin);
 
         env.storage()
             .instance()
             .set(&DataKey::Config, &Config { points_per_amt });
 
-        env.storage()
-            .instance()
-            .set(&DataKey::Initialized, &true);
+        env.storage().instance().set(&DataKey::Initialized, &true);
 
         env.storage()
             .instance()
@@ -138,7 +128,10 @@ impl AccrualContract {
             .persistent()
             .get(&DataKey::UserAccrual(user))
             .ok_or(AccrualError::NotStarted)?;
-        let elapsed = env.ledger().timestamp().saturating_sub(accrual.last_claim_ts) as u128;
+        let elapsed = env
+            .ledger()
+            .timestamp()
+            .saturating_sub(accrual.last_claim_ts) as u128;
         Ok(elapsed.saturating_mul(accrual.rate as u128) / 3600)
     }
 
@@ -181,22 +174,17 @@ impl AccrualContract {
 
         let reg_client = automint_registry::RegistryContractClient::new(&env, &registry);
 
-        reg_client
-            .add_points(&user, &pending);
+        reg_client.add_points(&user, &pending);
 
         if amt_to_mint > 0 {
             let token_client = automint_token::AMTTokenClient::new(&env, &token_contract);
 
-            token_client
-                .mint(&user, &(amt_to_mint as i128));
+            token_client.mint(&user, &(amt_to_mint as i128));
 
-            reg_client
-                .add_claimed_amt(&user, &(amt_to_mint as i128));
+            reg_client.add_claimed_amt(&user, &(amt_to_mint as i128));
 
-            env.events().publish(
-                (symbol_short!("mint"), user.clone()),
-                amt_to_mint as i128,
-            );
+            env.events()
+                .publish((symbol_short!("mint"), user.clone()), amt_to_mint as i128);
         }
 
         // Persist state only after all external calls succeed
@@ -223,10 +211,8 @@ impl AccrualContract {
             .instance()
             .extend_ttl(LEDGER_THRESHOLD, LEDGER_BUMP);
 
-        env.events().publish(
-            (symbol_short!("claim"), user),
-            (pending, remaining_points),
-        );
+        env.events()
+            .publish((symbol_short!("claim"), user), (pending, remaining_points));
 
         Ok(pending as i128)
     }
@@ -414,7 +400,9 @@ mod test {
         let user = Address::generate(&env);
         // rate=3600 pts/hr, elapsed=3600s → exactly 3600 points
         client.start_accrual(&user, &3600_u64);
-        env.ledger().with_mut(|l| { l.timestamp += 3600; });
+        env.ledger().with_mut(|l| {
+            l.timestamp += 3600;
+        });
         assert_eq!(client.pending_points(&user), 3600);
     }
 
@@ -517,7 +505,9 @@ mod test {
         let user = Address::generate(&env);
         client.start_accrual(&user, &0_u64);
 
-        env.ledger().with_mut(|l| { l.timestamp += 3600; });
+        env.ledger().with_mut(|l| {
+            l.timestamp += 3600;
+        });
         assert_eq!(client.pending_points(&user), 0);
     }
 
@@ -543,7 +533,9 @@ mod test {
         let user = Address::generate(&env);
         client.start_accrual(&user, &3600_u64);
 
-        env.ledger().with_mut(|l| { l.timestamp += 1800; });
+        env.ledger().with_mut(|l| {
+            l.timestamp += 1800;
+        });
 
         assert_eq!(client.pending_points(&user), 1800);
     }
@@ -860,9 +852,7 @@ mod auth_tests {
         ctx.client.start_accrual(&user, &5_u64);
 
         ctx.env.mock_auths(&[]);
-        let result = ctx
-            .client
-            .try_claim(&user, &ctx.token_id, &ctx.registry_id);
+        let result = ctx.client.try_claim(&user, &ctx.token_id, &ctx.registry_id);
         assert!(result.is_err());
     }
 
@@ -885,9 +875,7 @@ mod auth_tests {
                 sub_invokes: &[],
             },
         }]);
-        let result = ctx
-            .client
-            .try_claim(&user, &ctx.token_id, &ctx.registry_id);
+        let result = ctx.client.try_claim(&user, &ctx.token_id, &ctx.registry_id);
         assert!(result.is_ok());
     }
 }
