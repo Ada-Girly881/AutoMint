@@ -26,7 +26,7 @@ pub enum BotTier {
 }
 
 impl Tier {
-    pub fn price(&self) -> i128 {
+    pub fn price(self) -> i128 {
         match self {
             Tier::Basic => 0,
             Tier::Advanced => 500_0000000,
@@ -36,7 +36,7 @@ impl Tier {
 }
 
 impl BotTier {
-    pub fn price(&self) -> i128 {
+    pub fn price(self) -> i128 {
         match self {
             BotTier::Basic => 0,
             BotTier::Bronze => 500_0000000,
@@ -46,7 +46,7 @@ impl BotTier {
         }
     }
 
-    pub fn name(&self, env: &Env) -> String {
+    pub fn name(self, env: &Env) -> String {
         match self {
             BotTier::Basic => String::from_str(env, "Basic Bot"),
             BotTier::Bronze => String::from_str(env, "Bronze Bot"),
@@ -56,7 +56,7 @@ impl BotTier {
         }
     }
 
-    pub fn rate(&self) -> u64 {
+    pub fn rate(self) -> u64 {
         match self {
             BotTier::Basic => 1,
             BotTier::Bronze => 5,

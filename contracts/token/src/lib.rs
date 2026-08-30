@@ -90,12 +90,10 @@ impl AMTToken {
     // correct answer for either, not an error.
     pub fn allowance(env: Env, from: Address, spender: Address) -> i128 {
         let key = DataKey::Allowance(AllowanceKey { from, spender });
-        if let Some(a) = env.storage().temporary().get::<_, AllowanceValue>(&key) {
-            if a.expiration_ledger >= env.ledger().sequence() {
-                return a.amount;
-            }
+        match env.storage().temporary().get::<_, AllowanceValue>(&key) {
+            Some(a) if a.expiration_ledger >= env.ledger().sequence() => a.amount,
+            _ => 0,
         }
-        0
     }
 
     pub fn approve(
