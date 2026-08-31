@@ -44,12 +44,24 @@ export function useWallet() {
   const setError = useWalletStore(selectSetError);
   const disconnect = useWalletStore(selectDisconnect);
 
+  const isConnecting = status === "connecting";
+  const isNotInstalled = !isFreighterInstalled();
+
   const connect = useCallback(async () => {
     if (!isFreighterInstalled()) {
-      toast.error("Freighter wallet is not installed");
+      toast.error("Freighter wallet is not installed", {
+        action: {
+          label: "Install Freighter",
+          onClick: () => window.open(FREIGHTER_DOWNLOAD_URL, "_blank"),
+        },
+        duration: 8000,
+      });
       window.open(FREIGHTER_DOWNLOAD_URL, "_blank");
       return;
     }
+
+    // Guard: if already connecting, ignore duplicate requests (#532)
+    if (status === "connecting") return;
 
     setConnecting();
     toast.loading("Connecting wallet...", { id: "wallet-connect" });
@@ -76,7 +88,7 @@ export function useWallet() {
       setError(message);
       toast.error(message, { id: "wallet-connect" });
     }
-  }, [setConnecting, setConnected, setNetworkMismatch, setError]);
+  }, [status, setConnecting, setConnected, setNetworkMismatch, setError]);
 
   const disconnectWallet = useCallback(() => {
     disconnect();
@@ -110,7 +122,8 @@ export function useWallet() {
     connect,
     disconnect: disconnectWallet,
     isConnected: status === "connected",
-    isConnecting: status === "connecting",
+    isConnecting,
+    isNotInstalled,
   };
 }
 

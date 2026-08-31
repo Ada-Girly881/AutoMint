@@ -30,5 +30,16 @@ clippy: ## Run clippy across the workspace (CI uses the same invocation).
 test: ## Run the full Rust test suite.
 	cargo test --workspace
 
+coverage: ## Generate LLVM-cov lcov report for all contract crates.
+	@command -v cargo-llvm-cov >/dev/null 2>&1 || { echo "cargo-llvm-cov not installed. Install with: cargo install cargo-llvm-cov"; exit 1; }
+	cargo llvm-cov --workspace --lcov --output-path lcov.info
+	@echo "Coverage report written to lcov.info"
+	@command -v lcov >/dev/null 2>&1 && lcov --summary lcov.info || true
+
+coverage-html: ## Generate LLVM-cov HTML report for all contract crates.
+	@command -v cargo-llvm-cov >/dev/null 2>&1 || { echo "cargo-llvm-cov not installed. Install with: cargo install cargo-llvm-cov"; exit 1; }
+	cargo llvm-cov --workspace --html
+	@echo "HTML report written to target/llvm-cov/html/index.html"
+
 contracts-build: ## Build all contract wasm (delegates to the Soroban CLI).
 	stellar contract build

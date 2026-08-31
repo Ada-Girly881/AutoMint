@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Wallet, LogOut, AlertTriangle } from "lucide-react";
+import { Menu, X, Wallet, LogOut, AlertTriangle, Loader2, Download } from "lucide-react";
 import clsx from "clsx";
 import { useWallet } from "@/hooks/useWallet";
 
@@ -21,7 +21,7 @@ function truncateAddress(address: string): string {
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
-  const { publicKey, isConnected, networkMismatch, connect, disconnect } = useWallet();
+  const { publicKey, isConnected, networkMismatch, isConnecting, isNotInstalled, connect, disconnect } = useWallet();
 
   // Close mobile menu on Escape
   const handleKeyDown = useCallback(
@@ -56,6 +56,43 @@ export default function Header() {
         ? "bg-card-2 text-text"
         : "text-muted hover:bg-card-2 hover:text-text",
     );
+
+  // Determine the wallet button label and state (#532)
+  const getWalletButtonConfig = () => {
+    if (isConnecting) {
+      return {
+        label: "Connecting...",
+        icon: Loader2,
+        disabled: true,
+        ariaLabel: "Connecting wallet, please wait",
+      };
+    }
+    if (isNotInstalled) {
+      return {
+        label: "Install Freighter",
+        icon: Download,
+        disabled: false,
+        ariaLabel: "Install Freighter wallet",
+      };
+    }
+    if (networkMismatch) {
+      return {
+        label: "Wrong Network",
+        icon: AlertTriangle,
+        disabled: false,
+        ariaLabel: "Wallet connected to wrong network, switch to Testnet",
+      };
+    }
+    return {
+      label: "Connect Wallet",
+      icon: Wallet,
+      disabled: false,
+      ariaLabel: "Connect wallet",
+    };
+  };
+
+  const walletConfig = getWalletButtonConfig();
+  const WalletIcon = walletConfig.icon;
 
   return (
     <header className="sticky top-0 z-50 border-b border-liner bg-bg/80 backdrop-blur-xl">
@@ -114,10 +151,22 @@ export default function Header() {
           ) : (
             <button
               onClick={connect}
-              className="flex items-center gap-2 rounded-xl bg-gold/10 px-4 py-2 text-sm font-medium text-gold border border-gold/30 hover:bg-gold/20 hover:border-gold/50 transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              disabled={walletConfig.disabled}
+              aria-label={walletConfig.ariaLabel}
+              aria-busy={isConnecting}
+              className={clsx(
+                "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium border transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                isConnecting
+                  ? "bg-gold/5 border-gold/20 text-gold/60 cursor-not-allowed"
+                  : isNotInstalled
+                    ? "bg-blue/10 border-blue/30 text-blue hover:bg-blue/20 hover:border-blue/50"
+                    : networkMismatch
+                      ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-200 hover:bg-yellow-500/20"
+                      : "bg-gold/10 text-gold border-gold/30 hover:bg-gold/20 hover:border-gold/50",
+              )}
             >
-              <Wallet className="h-4 w-4" aria-hidden="true" />
-              Connect Wallet
+              <WalletIcon className={clsx("h-4 w-4", isConnecting && "animate-spin")} aria-hidden="true" />
+              {walletConfig.label}
             </button>
           )}
         </div>
@@ -174,10 +223,22 @@ export default function Header() {
               ) : (
                 <button
                   onClick={() => { connect(); setMobileOpen(false); }}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-gold/10 px-4 py-2.5 text-sm font-medium text-gold border border-gold/30 hover:bg-gold/20 hover:border-gold/50 transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  disabled={walletConfig.disabled}
+                  aria-label={walletConfig.ariaLabel}
+                  aria-busy={isConnecting}
+                  className={clsx(
+                    "flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium border transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                    isConnecting
+                      ? "bg-gold/5 border-gold/20 text-gold/60 cursor-not-allowed"
+                      : isNotInstalled
+                        ? "bg-blue/10 border-blue/30 text-blue hover:bg-blue/20 hover:border-blue/50"
+                        : networkMismatch
+                          ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-200 hover:bg-yellow-500/20"
+                          : "bg-gold/10 text-gold border-gold/30 hover:bg-gold/20 hover:border-gold/50",
+                  )}
                 >
-                  <Wallet className="h-4 w-4" aria-hidden="true" />
-                  Connect Wallet
+                  <WalletIcon className={clsx("h-4 w-4", isConnecting && "animate-spin")} aria-hidden="true" />
+                  {walletConfig.label}
                 </button>
               )}
             </div>
