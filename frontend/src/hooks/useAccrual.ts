@@ -56,6 +56,7 @@ export function useRegister() {
         queryClient.invalidateQueries({ queryKey: ["accrualState"] });
         queryClient.invalidateQueries({ queryKey: ["bots"] });
         queryClient.invalidateQueries({ queryKey: ["profile"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       }, 2000);
     },
     onError: (error: Error) => {
@@ -144,6 +145,55 @@ export function useAmtBalance() {
   });
 }
 
+export interface DashboardData {
+  registered: boolean;
+  profile: UserProfile | null;
+  bots: bigint[];
+  accrualState: AccrualState | null;
+  amtBalance: bigint;
+}
+
+/**
+ * One combined dashboard query (#495).
+ *
+ * The dashboard previously mounted `useRegistered`, `useProfile`, `useBots`,
+ * `useAccrualState`, and `useAmtBalance` — five hooks, five independent RPC
+ * requests (each preceded by its own `getAccount`) every poll cycle. This
+ * fetches all five in a single `Promise.all` on one cycle. Dashboard screens
+ * should prefer this hook; the individual hooks remain for pages that need
+ * only one value.
+ */
+export function useDashboardData() {
+  const publicKey = useWalletStore((s) => s.publicKey);
+
+  return useQuery<DashboardData>({
+    queryKey: ["dashboard", publicKey],
+    queryFn: async () => {
+      if (!publicKey) {
+        return {
+          registered: false,
+          profile: null,
+          bots: [],
+          accrualState: null,
+          amtBalance: BigInt(0),
+        };
+      }
+      const [registered, profile, bots, accrualState, amtBalance] = await Promise.all([
+        isRegistered(publicKey),
+        getUserProfile(publicKey),
+        getUserBots(publicKey),
+        getAccrualState(publicKey),
+        getAmtBalance(publicKey),
+      ]);
+      return { registered, profile, bots, accrualState, amtBalance };
+    },
+    enabled: !!publicKey,
+    refetchInterval: pollWhenVisible(),
+    staleTime: STALE_TIME.REALTIME,
+    gcTime: GC_TIME.STANDARD,
+  });
+}
+
 /** Claims accrued points (converting to AMT where the threshold is met). */
 export function useClaim() {
   const queryClient = useQueryClient();
@@ -160,6 +210,7 @@ export function useClaim() {
       queryClient.invalidateQueries({ queryKey: ["accrualState"] });
       queryClient.invalidateQueries({ queryKey: ["amtBalance"] });
       queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to claim points");
