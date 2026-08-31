@@ -56,6 +56,11 @@ async function buildTxXdr(
 /**
  * Parse a raw scVal map from the registry contract into a typed UserProfile.
  * The on-chain struct exposes `total_points`; older shapes used `points`.
+ *
+ * `address` is carried through so callers can tell whose profile a row is:
+ * the leaderboard needs it to render the owner and to match the connected
+ * wallet against a row. `scValToNative` renders a Soroban `Address` as its
+ * strkey string, so no further decoding is required.
  */
 export function parseUserProfile(
   rawData: Record<string, unknown>
@@ -63,6 +68,7 @@ export function parseUserProfile(
   const raw = rawData.total_points ?? rawData.points;
   const points = typeof raw === "bigint" ? raw : BigInt(String(raw ?? 0));
   return {
+    address: String(rawData.address ?? ""),
     username: String(rawData.username ?? ""),
     points,
   };

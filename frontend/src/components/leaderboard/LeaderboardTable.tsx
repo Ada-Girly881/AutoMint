@@ -3,15 +3,21 @@
 import React from "react";
 import { motion } from "framer-motion";
 import clsx from "clsx";
+import { formatPoints, type UserProfile } from "@/types";
 
-export interface LeaderboardUser {
+/**
+ * A leaderboard row: exactly the profile the registry returns, plus the
+ * 1-based position it occupies.
+ *
+ * Deliberately built on `UserProfile` rather than restating its fields.
+ * The previous hand-written shape declared `points: number`, which forced
+ * the page to call `Number(profile.points)` on a `u64` and silently lose
+ * precision past 2^53, and it made `username` optional and `address`
+ * nullable even though the contract always supplies both.
+ */
+export interface LeaderboardUser extends UserProfile {
+  /** 1-based position in the ranking. */
   rank: number;
-  /** Wallet address (may be empty string if not available) */
-  address: string;
-  /** Display username */
-  username?: string;
-  points: number;
-  botCount?: number;
 }
 
 export interface LeaderboardTableProps {
@@ -127,9 +133,10 @@ function LeaderboardTableComponent({ users, currentAddress }: LeaderboardTablePr
                   </div>
                 </td>
 
-                {/* Points */}
+                {/* Points — formatted straight from the bigint the contract
+                    returned; never narrowed to a JS number. */}
                 <td className="px-2 py-3 text-right font-semibold text-text sm:px-4">
-                  {user.points.toLocaleString()}
+                  {formatPoints(user.points)}
                 </td>
 
                 {/* Truncated address */}

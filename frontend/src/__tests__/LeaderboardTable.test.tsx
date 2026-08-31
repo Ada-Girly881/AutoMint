@@ -1,7 +1,10 @@
 import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import { axe, toHaveNoViolations } from 'jest-axe';
-import { LeaderboardTable } from '../components/leaderboard/LeaderboardTable';
+import {
+  LeaderboardTable,
+  type LeaderboardUser,
+} from '../components/leaderboard/LeaderboardTable';
 
 expect.extend(toHaveNoViolations);
 
@@ -13,10 +16,10 @@ jest.mock('framer-motion', () => ({
   },
 }));
 
-const mockUsers = [
-  { rank: 1, address: 'GABC1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ123456', points: 1500, username: 'alice', botCount: 3 },
-  { rank: 2, address: 'GXYZ78901234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ6789', points: 900, username: 'bob', botCount: 1 },
-  { rank: 5, address: 'GTEST00000000000000000000000000000000000000000000', points: 100, username: 'charlie' },
+const mockUsers: LeaderboardUser[] = [
+  { rank: 1, address: 'GABC1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ123456', points: 1500n, username: 'alice', botCount: 3 },
+  { rank: 2, address: 'GXYZ78901234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ6789', points: 900n, username: 'bob', botCount: 1 },
+  { rank: 5, address: 'GTEST00000000000000000000000000000000000000000000', points: 100n, username: 'charlie' },
 ];
 
 describe('LeaderboardTable Component', () => {
@@ -86,7 +89,7 @@ describe('LeaderboardTable Component', () => {
   });
 
   it('falls back to Trader # rank when username is missing', () => {
-    const users = [{ rank: 3, address: 'GABC12345678', points: 500 }];
+    const users: LeaderboardUser[] = [{ rank: 3, address: 'GABC12345678', points: 500n, username: '' }];
     render(<LeaderboardTable users={users} />);
     expect(screen.getByText('Trader #3')).toBeInTheDocument();
   });
@@ -123,8 +126,18 @@ describe('LeaderboardTable Component', () => {
     expect(screen.getByText('Address')).toBeInTheDocument();
   });
 
+  it('renders bigint points beyond Number.MAX_SAFE_INTEGER without losing digits', () => {
+    const huge = 9_007_199_254_740_993n; // 2^53 + 1 — unrepresentable as a JS number
+    render(
+      <LeaderboardTable
+        users={[{ rank: 1, address: 'GWHALE', points: huge, username: 'whale' }]}
+      />,
+    );
+    expect(screen.getByText(huge.toLocaleString('en-US'))).toBeInTheDocument();
+  });
+
   it('handles short addresses without truncation', () => {
-    const users = [{ rank: 1, address: 'GABC123', points: 100, username: 'short' }];
+    const users: LeaderboardUser[] = [{ rank: 1, address: 'GABC123', points: 100n, username: 'short' }];
     render(<LeaderboardTable users={users} />);
     expect(screen.getByText('GABC123')).toBeInTheDocument();
   });

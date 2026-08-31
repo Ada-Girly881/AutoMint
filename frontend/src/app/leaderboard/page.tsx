@@ -95,12 +95,7 @@ export default function LeaderboardPage() {
       {/* Populated table */}
       {!isLoading && !isError && leaderboardData && leaderboardData.length > 0 && (
         <LeaderboardTable
-          users={leaderboardData.map((user, index) => ({
-            rank: index + 1,
-            address: "", // UserProfile doesn't carry address; display username instead
-            username: user.username,
-            points: Number(user.points),
-          }))}
+          users={leaderboardData.map((user, index) => ({ ...user, rank: index + 1 }))}
           currentAddress={publicKey}
         />
       )}

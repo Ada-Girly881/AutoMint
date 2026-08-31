@@ -6,9 +6,11 @@ export type BotTier = "Basic" | "Bronze" | "Silver" | "Gold" | "Diamond";
 export type Tier = BotTier;
 
 export interface UserProfile {
+  /** Wallet address the profile belongs to. Always present — `parseUserProfile`
+   *  reads it from the registry's `UserProfile.address` field. */
+  address: string;
   username: string;
   points: bigint;
-  address?: string;
   botCount?: number;
   claimedAmt?: bigint;
   registeredAt?: number;
@@ -89,7 +91,10 @@ export function tierFromIndex(index: number): BotTier {
 }
 
 export function formatPoints(points: bigint): string {
-  return Number(points).toLocaleString("en-US");
+  // `Intl` formats a BigInt directly. Going through `Number` first would
+  // round away every digit past 2^53, so a large points balance would render
+  // a value the contract never held.
+  return points.toLocaleString("en-US");
 }
 
 export const XLM_DECIMALS = 7;

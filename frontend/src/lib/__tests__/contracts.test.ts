@@ -72,9 +72,13 @@ describe("getTotalUsers", () => {
 
 describe("getUserProfile", () => {
   it("parses the raw profile into a typed UserProfile", async () => {
-    mockSimulate.mockResolvedValue({ username: "Alice", total_points: 350n });
+    mockSimulate.mockResolvedValue({
+      address: "GUSER",
+      username: "Alice",
+      total_points: 350n,
+    });
     const profile = await getUserProfile("GUSER");
-    expect(profile).toEqual({ username: "Alice", points: 350n });
+    expect(profile).toEqual({ address: "GUSER", username: "Alice", points: 350n });
   });
 
   it("throws when the simulation throws (AM-143)", async () => {
@@ -86,13 +90,13 @@ describe("getUserProfile", () => {
 describe("getLeaderboard", () => {
   it("maps an array of raw profiles", async () => {
     mockSimulate.mockResolvedValue([
-      { username: "A", total_points: 500n },
-      { username: "B", total_points: 100n },
+      { address: "GA", username: "A", total_points: 500n },
+      { address: "GB", username: "B", total_points: 100n },
     ]);
     const lb = await getLeaderboard(10, "GSRC");
     expect(lb).toEqual([
-      { username: "A", points: 500n },
-      { username: "B", points: 100n },
+      { address: "GA", username: "A", points: 500n },
+      { address: "GB", username: "B", points: 100n },
     ]);
   });
 
