@@ -14,12 +14,12 @@ import {
 import { useWalletStore } from "@/store/walletStore";
 import { useState, useEffect } from "react";
 import type { AccrualState, UserProfile } from "@/types";
+import { pollWhenVisible } from "@/lib/polling";
+import { STALE_TIME, GC_TIME } from "@/lib/queryKeys";
 
 const BASIC_BOT_RATE = 1; // Basic bot accrual rate
 const UPDATE_INTERVAL = 1000; // Update every second
 const POINTS_PER_HOUR_DIVISOR = 3600; // Seconds in an hour
-const POLL_INTERVAL = 30000; // Poll every 30 seconds
-
 export function useRegister() {
   const queryClient = useQueryClient();
   const publicKey = useWalletStore(
@@ -76,11 +76,12 @@ export function useRegistered() {
     queryFn: () =>
       publicKey ? isRegistered(publicKey) : Promise.resolve(false),
     enabled: !!publicKey,
-    refetchInterval: POLL_INTERVAL,
-    staleTime: 300_000,
-    gcTime: 600_000,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    // Poll from one constant, and pause entirely when the tab is hidden (#495).
+    refetchInterval: pollWhenVisible(),
+    // Freshness declared here, not fought with a global 5-minute window (#496).
+    staleTime: STALE_TIME.STANDARD,
+    gcTime: GC_TIME.LONG,
+    // retry policy is the network-only predicate in app/providers.tsx (#497).
   });
 }
 
@@ -93,11 +94,9 @@ export function useProfile() {
     queryFn: () =>
       publicKey ? getUserProfile(publicKey) : Promise.resolve(null),
     enabled: !!publicKey,
-    refetchInterval: POLL_INTERVAL,
-    staleTime: 30_000,
-    gcTime: 300_000,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchInterval: pollWhenVisible(),
+    staleTime: STALE_TIME.STANDARD,
+    gcTime: GC_TIME.STANDARD,
   });
 }
 
@@ -109,11 +108,9 @@ export function useBots() {
     queryKey: ["bots", publicKey],
     queryFn: () => (publicKey ? getUserBots(publicKey) : Promise.resolve([])),
     enabled: !!publicKey,
-    refetchInterval: POLL_INTERVAL,
-    staleTime: 30_000,
-    gcTime: 300_000,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchInterval: pollWhenVisible(),
+    staleTime: STALE_TIME.STANDARD,
+    gcTime: GC_TIME.STANDARD,
   });
 }
 
@@ -126,11 +123,9 @@ export function useAccrualState() {
     queryFn: () =>
       publicKey ? getAccrualState(publicKey) : Promise.resolve(null),
     enabled: !!publicKey,
-    refetchInterval: POLL_INTERVAL,
-    staleTime: 30_000,
-    gcTime: 300_000,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchInterval: pollWhenVisible(),
+    staleTime: STALE_TIME.REALTIME,
+    gcTime: GC_TIME.STANDARD,
   });
 }
 
@@ -143,11 +138,9 @@ export function useAmtBalance() {
     queryFn: () =>
       publicKey ? getAmtBalance(publicKey) : Promise.resolve(BigInt(0)),
     enabled: !!publicKey,
-    refetchInterval: POLL_INTERVAL,
-    staleTime: 30_000,
-    gcTime: 300_000,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchInterval: pollWhenVisible(),
+    staleTime: STALE_TIME.REALTIME,
+    gcTime: GC_TIME.STANDARD,
   });
 }
 
