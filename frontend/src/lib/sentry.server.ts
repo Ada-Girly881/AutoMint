@@ -14,8 +14,10 @@ function scrubString(value: string): string {
   return value.replace(STELLAR_ADDRESS_RE, "[address]").replace(EMAIL_RE, "[email]");
 }
 
+const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+
 Sentry.init({
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  ...(dsn ? { dsn } : {}),
 
   tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
 

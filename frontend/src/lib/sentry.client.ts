@@ -34,11 +34,13 @@ function scrubBreadcrumbs(breadcrumbs: Sentry.Breadcrumb[]): Sentry.Breadcrumb[]
           Object.entries(b.data).map(([k, v]) => [k, typeof v === "string" ? scrubString(v) : v]),
         )
       : b.data,
-  }));
+  })) as Sentry.Breadcrumb[];
 }
 
+const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+
 Sentry.init({
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  ...(dsn ? { dsn } : {}),
 
   /**
    * Sample 10 % of traces in production; 100 % in other environments so
@@ -56,7 +58,10 @@ Sentry.init({
    */
   beforeSend(event) {
     if (event.breadcrumbs?.values) {
-      event.breadcrumbs.values = scrubBreadcrumbs(event.breadcrumbs.values);
+      const scrubbed = scrubBreadcrumbs(Array.from(event.breadcrumbs.values()));
+      event.breadcrumbs = {
+        values: () => scrubbed[Symbol.iterator](),
+      } as unknown as typeof event.breadcrumbs;
     }
 
     if (event.request?.url) {

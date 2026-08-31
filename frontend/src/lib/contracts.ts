@@ -162,7 +162,7 @@ export async function listBot(
  * Buy a bot from the marketplace.
  * Transfers AMT tokens to seller and bot to buyer.
  */
-export async function buyBot(address: string, listingId: number): Promise<string> {
+export async function buyBot(address: string, listingId: bigint): Promise<string> {
   return buildTxXdr(
     MARKETPLACE_CONTRACT_ID,
     "buy_bot",
