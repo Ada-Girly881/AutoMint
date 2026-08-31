@@ -3,13 +3,13 @@ import { getLeaderboard, getUserRank, type UserRank } from "@/lib/contracts";
 import { useWalletStore, selectPublicKey } from "@/store/walletStore";
 import type { UserProfile } from "@/types";
 import { pollWhenVisible } from "@/lib/polling";
-import { STALE_TIME, GC_TIME } from "@/lib/queryKeys";
+import { STALE_TIME, GC_TIME, qk } from "@/lib/queryKeys";
 
 const DEFAULT_LEADERBOARD_LIMIT = 50;
 
 export function useLeaderboard(limit = DEFAULT_LEADERBOARD_LIMIT) {
   return useQuery<UserProfile[]>({
-    queryKey: ["leaderboard", limit],
+    queryKey: qk.leaderboard(limit),
     queryFn: () => getLeaderboard(limit),
     refetchInterval: pollWhenVisible(),
     staleTime: STALE_TIME.SHORT,

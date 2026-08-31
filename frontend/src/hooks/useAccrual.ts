@@ -11,11 +11,12 @@ import {
   getAmtBalance,
   claimPoints,
 } from "@/lib/contracts";
+import { getLedgerCloseTime } from "@/lib/stellar";
 import { useWalletStore, selectPublicKey } from "@/store/walletStore";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { AccrualState, UserProfile } from "@/types";
 import { pollWhenVisible } from "@/lib/polling";
-import { STALE_TIME, GC_TIME } from "@/lib/queryKeys";
+import { STALE_TIME, GC_TIME, qk, DASHBOARD_POLL_MS } from "@/lib/queryKeys";
 
 const BASIC_BOT_RATE = 1; // Basic bot accrual rate
 const UPDATE_INTERVAL = 1000; // Update every second
@@ -50,11 +51,12 @@ export function useRegister() {
 
       // Delayed refetch to allow blockchain state to propagate
       setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ["registered"] });
-        queryClient.invalidateQueries({ queryKey: ["accrualState"] });
-        queryClient.invalidateQueries({ queryKey: ["bots"] });
-        queryClient.invalidateQueries({ queryKey: ["profile"] });
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+        queryClient.invalidateQueries({ queryKey: qk.registered(publicKey) });
+        queryClient.invalidateQueries({ queryKey: qk.accrualState(publicKey) });
+        queryClient.invalidateQueries({ queryKey: qk.bots(publicKey) });
+        queryClient.invalidateQueries({ queryKey: ["botDetails"] });
+        queryClient.invalidateQueries({ queryKey: qk.profile(publicKey) });
+        queryClient.invalidateQueries({ queryKey: qk.dashboard(publicKey) });
       }, 2000);
     },
     onError: (error: Error) => {
@@ -71,7 +73,7 @@ export function useRegistered() {
   const publicKey = useWalletStore(selectPublicKey);
 
   return useQuery<boolean>({
-    queryKey: ["registered", publicKey],
+    queryKey: qk.registered(publicKey),
     queryFn: () =>
       publicKey ? isRegistered(publicKey) : Promise.resolve(false),
     enabled: !!publicKey,
@@ -89,7 +91,7 @@ export function useProfile() {
   const publicKey = useWalletStore(selectPublicKey);
 
   return useQuery<UserProfile | null>({
-    queryKey: ["profile", publicKey],
+    queryKey: qk.profile(publicKey),
     queryFn: () =>
       publicKey ? getUserProfile(publicKey) : Promise.resolve(null),
     enabled: !!publicKey,
@@ -104,7 +106,7 @@ export function useBots() {
   const publicKey = useWalletStore(selectPublicKey);
 
   return useQuery<bigint[]>({
-    queryKey: ["bots", publicKey],
+    queryKey: qk.bots(publicKey),
     queryFn: () => (publicKey ? getUserBots(publicKey) : Promise.resolve([])),
     enabled: !!publicKey,
     refetchInterval: pollWhenVisible(),
@@ -118,7 +120,7 @@ export function useAccrualState() {
   const publicKey = useWalletStore(selectPublicKey);
 
   return useQuery<AccrualState | null>({
-    queryKey: ["accrualState", publicKey],
+    queryKey: qk.accrualState(publicKey),
     queryFn: () =>
       publicKey ? getAccrualState(publicKey) : Promise.resolve(null),
     enabled: !!publicKey,
@@ -133,7 +135,7 @@ export function useAmtBalance() {
   const publicKey = useWalletStore(selectPublicKey);
 
   return useQuery<bigint>({
-    queryKey: ["amtBalance", publicKey],
+    queryKey: qk.amtBalance(publicKey),
     queryFn: () =>
       publicKey ? getAmtBalance(publicKey) : Promise.resolve(BigInt(0)),
     enabled: !!publicKey,
@@ -165,7 +167,7 @@ export function useDashboardData() {
   const publicKey = useWalletStore((s) => s.publicKey);
 
   return useQuery<DashboardData>({
-    queryKey: ["dashboard", publicKey],
+    queryKey: qk.dashboard(publicKey),
     queryFn: async () => {
       if (!publicKey) {
         return {
@@ -204,16 +206,65 @@ export function useClaim() {
     },
     onSuccess: () => {
       toast.success("Points claimed successfully!");
-      queryClient.invalidateQueries({ queryKey: ["profile"] });
-      queryClient.invalidateQueries({ queryKey: ["accrualState"] });
-      queryClient.invalidateQueries({ queryKey: ["amtBalance"] });
+      queryClient.invalidateQueries({ queryKey: qk.profile(publicKey) });
+      queryClient.invalidateQueries({ queryKey: qk.accrualState(publicKey) });
+      queryClient.invalidateQueries({ queryKey: qk.amtBalance(publicKey) });
       queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: qk.dashboard(publicKey) });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to claim points");
     },
   });
+}
+
+/**
+ * Computes the offset (in ms) between the client clock and the Stellar
+ * ledger close time (#492).
+ *
+ * A positive offset means the client clock is **ahead** of the ledger. The
+ * offset is refreshed on every dashboard poll cycle and surfaced to
+ * `useAnimatedPoints` so the interpolated counter stays accurate regardless
+ * of browser clock skew.
+ */
+export function useLedgerTimeOffset(): number {
+  const [offsetMs, setOffsetMs] = useState(0);
+  const offsetRef = useRef(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refresh = async () => {
+      try {
+        const closeTimeSec = await getLedgerCloseTime();
+        const closeTimeMs = closeTimeSec * 1000;
+        const now = Date.now();
+        const skewMs = closeTimeMs - now;
+
+        if (!cancelled) {
+          offsetRef.current = skewMs;
+          setOffsetMs(skewMs);
+
+          if (Math.abs(skewMs) > 60_000) {
+            console.warn(
+              `[AutoMint] Client clock skew detected: ${skewMs > 0 ? "+" : ""}${Math.round(skewMs / 1000)}s from ledger time.`,
+            );
+          }
+        }
+      } catch {
+        // RPC failure — keep the existing offset.
+      }
+    };
+
+    refresh();
+    const interval = setInterval(refresh, DASHBOARD_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  return offsetMs;
 }
 
 export interface AnimatedPoints {
@@ -240,6 +291,9 @@ export function useAnimatedPoints(ratePerHour: number = BASIC_BOT_RATE): Animate
 
   const { data: accrualState } = useAccrualState();
   const { data: profile } = useProfile();
+  const offsetMs = useLedgerTimeOffset();
+  const offsetRef = useRef(offsetMs);
+  offsetRef.current = offsetMs;
 
   useEffect(() => {
     const tick = () => {
@@ -247,7 +301,9 @@ export function useAnimatedPoints(ratePerHour: number = BASIC_BOT_RATE): Animate
         setPending(BigInt(0));
         return;
       }
-      const now = Math.floor(Date.now() / 1000);
+      // Apply the ledger-clock offset so a fast/slow browser clock does not
+      // corrupt the interpolated counter (#492).
+      const now = Math.floor((Date.now() + offsetRef.current) / 1000);
       const elapsedSeconds = now - Number(accrualState.last_claim_ts);
       if (elapsedSeconds <= 0) {
         setPending(BigInt(0));

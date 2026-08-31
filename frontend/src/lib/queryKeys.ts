@@ -50,17 +50,28 @@ export const GC_TIME = {
  * Structured query keys. The individual hooks still accept a nullable address
  * (their `enabled` guard stops the query firing with `null`); prefix
  * invalidation (`invalidateQueries({ queryKey: ["profile"] })`) keeps working.
+ *
+ * Every bigint is serialised to a string so React Query can hash keys
+ * consistently — raw bigints are not JSON-serialisable (#494).
+ *
+ * Bot detail queries live under their own root key `["botDetails", ...]`,
+ * separate from `["bots", ...]`, so invalidating the bot-ID list does not
+ * trigger expensive N+1 detail refetches (#494).
  */
 export const qk = {
   registered: (address: string | null): QueryKey => ["registered", address],
   profile: (address: string | null): QueryKey => ["profile", address],
   bots: (address: string | null): QueryKey => ["bots", address],
-  botDetails: (address: string | null, botId: bigint): QueryKey => ["bot", botId, address],
-  allBotDetails: (address: string | null, botIds: bigint[]): QueryKey => [
-    "bots",
-    "details",
+  botDetails: (address: string | null, botId: bigint): QueryKey => [
+    "botDetails",
     address,
-    botIds,
+    botId.toString(),
+  ],
+  allBotDetails: (address: string | null, botIds: bigint[]): QueryKey => [
+    "botDetails",
+    "all",
+    address,
+    botIds.map(String).join(","),
   ],
   accrualState: (address: string | null): QueryKey => ["accrualState", address],
   amtBalance: (address: string | null): QueryKey => ["amtBalance", address],

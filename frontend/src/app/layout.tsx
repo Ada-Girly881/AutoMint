@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Sora, Inter } from "next/font/google";
-import { Toaster } from "sonner";
 import Providers from "./providers";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -46,16 +45,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </main>
             <Footer />
           </ErrorBoundary>
-          <Toaster
-            position="bottom-right"
-            toastOptions={{
-              style: {
-                background: "var(--memefi-color-card)",
-                border: "1px solid var(--memefi-color-liner)",
-                color: "var(--memefi-color-text)",
-              },
-            }}
-          />
         </Providers>
       </body>
     </html>

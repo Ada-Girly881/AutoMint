@@ -4,7 +4,7 @@ import { buyBot as buyBotTx, mintTierBot as mintTierBotTx, getActiveListings, ge
 import { useWalletStore, selectPublicKey } from "@/store/walletStore";
 import type { Tier } from "@/types";
 import { pollWhenVisible } from "@/lib/polling";
-import { STALE_TIME, GC_TIME } from "@/lib/queryKeys";
+import { STALE_TIME, GC_TIME, qk } from "@/lib/queryKeys";
 
 export function useBuyBot() {
   const queryClient = useQueryClient();
@@ -17,9 +17,10 @@ export function useBuyBot() {
     },
     onSuccess: () => {
       toast.success("Bot purchased successfully!");
-      queryClient.invalidateQueries({ queryKey: ["listings"] });
-      queryClient.invalidateQueries({ queryKey: ["bots"] });
-      queryClient.invalidateQueries({ queryKey: ["accrualState"] });
+      queryClient.invalidateQueries({ queryKey: qk.listings() });
+      queryClient.invalidateQueries({ queryKey: qk.bots(publicKey) });
+      queryClient.invalidateQueries({ queryKey: ["botDetails"] });
+      queryClient.invalidateQueries({ queryKey: qk.accrualState(publicKey) });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to purchase bot");
@@ -38,8 +39,9 @@ export function useMintTierBot() {
     },
     onSuccess: () => {
       toast.success("Tier bot minted successfully!");
-      queryClient.invalidateQueries({ queryKey: ["bots"] });
-      queryClient.invalidateQueries({ queryKey: ["accrualState"] });
+      queryClient.invalidateQueries({ queryKey: qk.bots(publicKey) });
+      queryClient.invalidateQueries({ queryKey: ["botDetails"] });
+      queryClient.invalidateQueries({ queryKey: qk.accrualState(publicKey) });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to mint tier bot");
@@ -49,7 +51,7 @@ export function useMintTierBot() {
 
 export function useListings() {
   return useQuery({
-    queryKey: ["listings"],
+    queryKey: qk.listings(),
     queryFn: () => getActiveListings(),
     refetchInterval: pollWhenVisible(),
     staleTime: STALE_TIME.SHORT,
@@ -61,7 +63,7 @@ export function useMyListings() {
   const publicKey = useWalletStore(selectPublicKey);
 
   return useQuery({
-    queryKey: ["myListings", publicKey],
+    queryKey: qk.myListings(publicKey),
     queryFn: () => (publicKey ? getUserListings(publicKey) : Promise.resolve([])),
     enabled: !!publicKey,
     refetchInterval: pollWhenVisible(),
@@ -81,9 +83,10 @@ export function useListBot() {
     },
     onSuccess: () => {
       toast.success("Bot listed successfully!");
-      queryClient.invalidateQueries({ queryKey: ["listings"] });
-      queryClient.invalidateQueries({ queryKey: ["myListings"] });
-      queryClient.invalidateQueries({ queryKey: ["bots"] });
+      queryClient.invalidateQueries({ queryKey: qk.listings() });
+      queryClient.invalidateQueries({ queryKey: qk.myListings(publicKey) });
+      queryClient.invalidateQueries({ queryKey: qk.bots(publicKey) });
+      queryClient.invalidateQueries({ queryKey: ["botDetails"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to list bot");
@@ -102,9 +105,10 @@ export function useCancelListing() {
     },
     onSuccess: () => {
       toast.success("Listing cancelled successfully!");
-      queryClient.invalidateQueries({ queryKey: ["listings"] });
-      queryClient.invalidateQueries({ queryKey: ["myListings"] });
-      queryClient.invalidateQueries({ queryKey: ["bots"] });
+      queryClient.invalidateQueries({ queryKey: qk.listings() });
+      queryClient.invalidateQueries({ queryKey: qk.myListings(publicKey) });
+      queryClient.invalidateQueries({ queryKey: qk.bots(publicKey) });
+      queryClient.invalidateQueries({ queryKey: ["botDetails"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to cancel listing");

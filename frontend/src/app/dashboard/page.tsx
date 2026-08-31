@@ -84,7 +84,7 @@ export default function DashboardPage() {
   // Calculate total accrual rate from bots
   const totalRate =
     bots?.reduce(
-      (sum: number, bot: { accrual_rate: bigint }) => sum + Number(bot.accrual_rate),
+      (sum: number, bot: BotNFT) => sum + Number(bot.accrual_rate),
       0,
     ) || 0;
 
