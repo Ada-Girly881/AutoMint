@@ -2,19 +2,18 @@ import { useQuery } from "@tanstack/react-query";
 import { getLeaderboard, getUserRank, type UserRank } from "@/lib/contracts";
 import { useWalletStore, selectPublicKey } from "@/store/walletStore";
 import type { UserProfile } from "@/types";
+import { pollWhenVisible } from "@/lib/polling";
+import { STALE_TIME, GC_TIME } from "@/lib/queryKeys";
 
-const LEADERBOARD_POLL_INTERVAL = 30_000;
 const DEFAULT_LEADERBOARD_LIMIT = 50;
 
 export function useLeaderboard(limit = DEFAULT_LEADERBOARD_LIMIT) {
   return useQuery<UserProfile[]>({
     queryKey: ["leaderboard", limit],
     queryFn: () => getLeaderboard(limit),
-    refetchInterval: LEADERBOARD_POLL_INTERVAL,
-    staleTime: 15_000,
-    gcTime: 120_000,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchInterval: pollWhenVisible(),
+    staleTime: STALE_TIME.SHORT,
+    gcTime: GC_TIME.SHORT,
   });
 }
 

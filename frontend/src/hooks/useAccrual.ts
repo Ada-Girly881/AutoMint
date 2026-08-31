@@ -14,12 +14,12 @@ import {
 import { useWalletStore, selectPublicKey } from "@/store/walletStore";
 import { useState, useEffect } from "react";
 import type { AccrualState, UserProfile } from "@/types";
+import { pollWhenVisible } from "@/lib/polling";
+import { STALE_TIME, GC_TIME } from "@/lib/queryKeys";
 
 const BASIC_BOT_RATE = 1; // Basic bot accrual rate
 const UPDATE_INTERVAL = 1000; // Update every second
 const POINTS_PER_HOUR_DIVISOR = 3600; // Seconds in an hour
-const POLL_INTERVAL = 30000; // Poll every 30 seconds
-
 export function useRegister() {
   const queryClient = useQueryClient();
   const publicKey = useWalletStore(selectPublicKey);
@@ -54,6 +54,7 @@ export function useRegister() {
         queryClient.invalidateQueries({ queryKey: ["accrualState"] });
         queryClient.invalidateQueries({ queryKey: ["bots"] });
         queryClient.invalidateQueries({ queryKey: ["profile"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       }, 2000);
     },
     onError: (error: Error) => {
@@ -74,11 +75,12 @@ export function useRegistered() {
     queryFn: () =>
       publicKey ? isRegistered(publicKey) : Promise.resolve(false),
     enabled: !!publicKey,
-    refetchInterval: POLL_INTERVAL,
-    staleTime: 300_000,
-    gcTime: 600_000,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    // Poll from one constant, and pause entirely when the tab is hidden (#495).
+    refetchInterval: pollWhenVisible(),
+    // Freshness declared here, not fought with a global 5-minute window (#496).
+    staleTime: STALE_TIME.STANDARD,
+    gcTime: GC_TIME.LONG,
+    // retry policy is the network-only predicate in app/providers.tsx (#497).
   });
 }
 
@@ -91,11 +93,9 @@ export function useProfile() {
     queryFn: () =>
       publicKey ? getUserProfile(publicKey) : Promise.resolve(null),
     enabled: !!publicKey,
-    refetchInterval: POLL_INTERVAL,
-    staleTime: 30_000,
-    gcTime: 300_000,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchInterval: pollWhenVisible(),
+    staleTime: STALE_TIME.STANDARD,
+    gcTime: GC_TIME.STANDARD,
   });
 }
 
@@ -107,11 +107,9 @@ export function useBots() {
     queryKey: ["bots", publicKey],
     queryFn: () => (publicKey ? getUserBots(publicKey) : Promise.resolve([])),
     enabled: !!publicKey,
-    refetchInterval: POLL_INTERVAL,
-    staleTime: 30_000,
-    gcTime: 300_000,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchInterval: pollWhenVisible(),
+    staleTime: STALE_TIME.STANDARD,
+    gcTime: GC_TIME.STANDARD,
   });
 }
 
@@ -124,11 +122,9 @@ export function useAccrualState() {
     queryFn: () =>
       publicKey ? getAccrualState(publicKey) : Promise.resolve(null),
     enabled: !!publicKey,
-    refetchInterval: POLL_INTERVAL,
-    staleTime: 30_000,
-    gcTime: 300_000,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchInterval: pollWhenVisible(),
+    staleTime: STALE_TIME.REALTIME,
+    gcTime: GC_TIME.STANDARD,
   });
 }
 
@@ -141,11 +137,58 @@ export function useAmtBalance() {
     queryFn: () =>
       publicKey ? getAmtBalance(publicKey) : Promise.resolve(BigInt(0)),
     enabled: !!publicKey,
-    refetchInterval: POLL_INTERVAL,
-    staleTime: 30_000,
-    gcTime: 300_000,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchInterval: pollWhenVisible(),
+    staleTime: STALE_TIME.REALTIME,
+    gcTime: GC_TIME.STANDARD,
+  });
+}
+
+export interface DashboardData {
+  registered: boolean;
+  profile: UserProfile | null;
+  bots: bigint[];
+  accrualState: AccrualState | null;
+  amtBalance: bigint;
+}
+
+/**
+ * One combined dashboard query (#495).
+ *
+ * The dashboard previously mounted `useRegistered`, `useProfile`, `useBots`,
+ * `useAccrualState`, and `useAmtBalance` — five hooks, five independent RPC
+ * requests (each preceded by its own `getAccount`) every poll cycle. This
+ * fetches all five in a single `Promise.all` on one cycle. Dashboard screens
+ * should prefer this hook; the individual hooks remain for pages that need
+ * only one value.
+ */
+export function useDashboardData() {
+  const publicKey = useWalletStore((s) => s.publicKey);
+
+  return useQuery<DashboardData>({
+    queryKey: ["dashboard", publicKey],
+    queryFn: async () => {
+      if (!publicKey) {
+        return {
+          registered: false,
+          profile: null,
+          bots: [],
+          accrualState: null,
+          amtBalance: BigInt(0),
+        };
+      }
+      const [registered, profile, bots, accrualState, amtBalance] = await Promise.all([
+        isRegistered(publicKey),
+        getUserProfile(publicKey),
+        getUserBots(publicKey),
+        getAccrualState(publicKey),
+        getAmtBalance(publicKey),
+      ]);
+      return { registered, profile, bots, accrualState, amtBalance };
+    },
+    enabled: !!publicKey,
+    refetchInterval: pollWhenVisible(),
+    staleTime: STALE_TIME.REALTIME,
+    gcTime: GC_TIME.STANDARD,
   });
 }
 
@@ -165,6 +208,7 @@ export function useClaim() {
       queryClient.invalidateQueries({ queryKey: ["accrualState"] });
       queryClient.invalidateQueries({ queryKey: ["amtBalance"] });
       queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to claim points");
@@ -172,55 +216,59 @@ export function useClaim() {
   });
 }
 
-export function useAnimatedPoints(ratePerHour: number = BASIC_BOT_RATE) {
-  const [displayedPoints, setDisplayedPoints] = useState<bigint>(BigInt(0));
+export interface AnimatedPoints {
+  /**
+   * The headline lifetime total: the registry's point total plus the points
+   * interpolated since the last claim. Monotonic across a claim — a claim
+   * raises the registry total and resets the interpolation to ~0, so the sum
+   * never drops (#491).
+   */
+  total: bigint;
+  /** Points accrued since the last claim, recomputed each animation tick. */
+  pending: bigint;
+  /**
+   * The sub-threshold carry toward the next AMT (0 .. POINTS_PER_AMT - 1),
+   * taken straight from the accrual state. Shown separately as "progress to
+   * next AMT" — it is NOT part of the headline, which is why folding it in
+   * made the headline reset after every claim (#491, AM-084).
+   */
+  progressToNext: bigint;
+}
 
-  // Fetch accrual state and user profile
+export function useAnimatedPoints(ratePerHour: number = BASIC_BOT_RATE): AnimatedPoints {
+  const [pending, setPending] = useState<bigint>(BigInt(0));
+
   const { data: accrualState } = useAccrualState();
   const { data: profile } = useProfile();
 
   useEffect(() => {
-    if (!accrualState && !profile) {
-      setDisplayedPoints(BigInt(0));
-      return;
-    }
-
-    // Fallback to profile.totalPoints when accrual state is unavailable
-    if (!accrualState && profile) {
-      setDisplayedPoints(profile.points);
-      return;
-    }
-
-    // Calculate interpolated points based on accrual state
-    const updatePoints = () => {
-      if (!accrualState) return;
-
-      const now = Math.floor(Date.now() / 1000); // Current timestamp in seconds
-      const lastClaimTs = Number(accrualState.last_claim_ts);
-      const elapsedSeconds = now - lastClaimTs;
-
-      if (elapsedSeconds <= 0) {
-        setDisplayedPoints(accrualState.total_claimed_points);
+    const tick = () => {
+      if (!accrualState) {
+        setPending(BigInt(0));
         return;
       }
-
-      // Calculate points earned since last claim
-      const pointsEarned = BigInt(
-        Math.floor((elapsedSeconds * ratePerHour) / POINTS_PER_HOUR_DIVISOR),
+      const now = Math.floor(Date.now() / 1000);
+      const elapsedSeconds = now - Number(accrualState.last_claim_ts);
+      if (elapsedSeconds <= 0) {
+        setPending(BigInt(0));
+        return;
+      }
+      setPending(
+        BigInt(Math.floor((elapsedSeconds * ratePerHour) / POINTS_PER_HOUR_DIVISOR)),
       );
-      const totalPoints = accrualState.total_claimed_points + pointsEarned;
-
-      setDisplayedPoints(totalPoints);
     };
 
-    // Initial update
-    updatePoints();
-
-    // Set up interval for smooth animation
-    const interval = setInterval(updatePoints, UPDATE_INTERVAL);
-
+    tick();
+    const interval = setInterval(tick, UPDATE_INTERVAL);
     return () => clearInterval(interval);
-  }, [accrualState, profile, ratePerHour]);
+  }, [accrualState, ratePerHour]);
 
-  return displayedPoints;
+  // The lifetime base is the registry point total (profile.points), NOT
+  // accrualState.total_claimed_points — that field is only the sub-threshold
+  // carry and shrinks back toward zero on every claim (#491, AM-084). When the
+  // accrual-state field `lifetime_points` lands (AM-101) it can replace this.
+  const lifetime = profile?.points ?? BigInt(0);
+  const progressToNext = accrualState?.total_claimed_points ?? BigInt(0);
+
+  return { total: lifetime + pending, pending, progressToNext };
 }

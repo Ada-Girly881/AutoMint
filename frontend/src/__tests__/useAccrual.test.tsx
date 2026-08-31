@@ -8,6 +8,7 @@ import {
   useAccrualState,
   useAmtBalance,
   useClaim,
+  useAnimatedPoints,
 } from '../hooks/useAccrual';
 import {
   registerUser,
@@ -326,5 +327,59 @@ describe('useAccrual Hooks', () => {
 
       expect(result.current.error).toEqual(new Error('Wallet not connected'));
     });
+  });
+});
+
+describe('useAnimatedPoints (#491)', () => {
+  let qc: QueryClient;
+  const pk = 'GABCUSER';
+
+  beforeEach(() => {
+    qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    (mockUseWalletStore as unknown as jest.Mock).mockImplementation((selector) =>
+      selector({ publicKey: pk })
+    );
+  });
+  afterEach(() => jest.useRealTimers());
+
+  const wrap = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+  );
+
+  it('bases the headline on the registry lifetime total plus pending, with the carry shown separately', async () => {
+    const lastClaim = Math.floor(Date.now() / 1000) - 3600; // one hour ago
+    mockGetUserProfile.mockResolvedValue({ username: 'u', points: 12_345n });
+    mockGetAccrualState.mockResolvedValue({
+      last_claim_ts: BigInt(lastClaim),
+      total_claimed_points: 42n, // the sub-threshold carry, NOT a lifetime total
+    });
+
+    const { result } = renderHook(() => useAnimatedPoints(1), { wrapper: wrap });
+
+    // Waiting on the composite total also waits for profile (12,345) and the
+    // interpolated pending (1 point at rate 1/hr over 3600s) to settle.
+    await waitFor(() => {
+      expect(result.current.total).toBe(12_346n);
+    });
+    expect(result.current.pending).toBe(1n);
+    // The carry is surfaced separately as "progress to next AMT" — it is NOT
+    // folded into the headline, which is the bug (#491).
+    expect(result.current.progressToNext).toBe(42n);
+  });
+
+  it('never renders a total below the registry lifetime points across a claim', async () => {
+    // Immediately after a claim: last_claim_ts is now, carry reset to a few.
+    mockGetUserProfile.mockResolvedValue({ username: 'u', points: 1000n });
+    mockGetAccrualState.mockResolvedValue({
+      last_claim_ts: BigInt(Math.floor(Date.now() / 1000)),
+      total_claimed_points: 3n,
+    });
+
+    const { result } = renderHook(() => useAnimatedPoints(1), { wrapper: wrap });
+
+    await waitFor(() => expect(result.current.total).toBe(1000n));
+    expect(result.current.total).toBeGreaterThanOrEqual(1000n);
   });
 });

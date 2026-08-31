@@ -3,6 +3,8 @@ import { toast } from "sonner";
 import { buyBot as buyBotTx, mintTierBot as mintTierBotTx, getActiveListings, getUserListings, listBot, cancelListing } from "@/lib/contracts";
 import { useWalletStore, selectPublicKey } from "@/store/walletStore";
 import type { Tier } from "@/types";
+import { pollWhenVisible } from "@/lib/polling";
+import { STALE_TIME, GC_TIME } from "@/lib/queryKeys";
 
 export function useBuyBot() {
   const queryClient = useQueryClient();
@@ -49,11 +51,9 @@ export function useListings() {
   return useQuery({
     queryKey: ["listings"],
     queryFn: () => getActiveListings(),
-    refetchInterval: 30000,
-    staleTime: 15_000,
-    gcTime: 120_000,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchInterval: pollWhenVisible(),
+    staleTime: STALE_TIME.SHORT,
+    gcTime: GC_TIME.SHORT,
   });
 }
 
@@ -64,11 +64,9 @@ export function useMyListings() {
     queryKey: ["myListings", publicKey],
     queryFn: () => (publicKey ? getUserListings(publicKey) : Promise.resolve([])),
     enabled: !!publicKey,
-    refetchInterval: 30000,
-    staleTime: 15_000,
-    gcTime: 120_000,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchInterval: pollWhenVisible(),
+    staleTime: STALE_TIME.SHORT,
+    gcTime: GC_TIME.SHORT,
   });
 }
 
