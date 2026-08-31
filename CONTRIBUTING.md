@@ -52,7 +52,12 @@ Thank you for contributing to AutoMint! This codebase is built through open-sour
 7. **Dependency Management**:
    AutoMint pins `soroban-sdk` to an exact patch version and disables its default
    features so production wasm stays lean and reproducible — see
-   `docs/DEPENDENCIES.md`. Before bumping any dependency, review the diff:
+   `docs/DEPENDENCIES.md`. 
+   
+   > **Note**: We also pin `stellar-cli` to version `21.4.0`. Install it exactly via:
+   > `cargo install --locked stellar-cli --version 21.4.0 --features opt`
+   
+   Before bumping any dependency, review the diff:
 
    ```bash
    make deps-check    # `cargo update --dry-run` — prints bumps without touching Cargo.lock
