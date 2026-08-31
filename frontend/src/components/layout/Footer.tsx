@@ -1,4 +1,7 @@
 import { Github, ExternalLink } from "lucide-react";
+import { NETWORK } from "@/lib/constants";
+
+const REPO_URL = "https://github.com/Ada-Girly881/AutoMint";
 
 const footerLinks = {
   product: [
@@ -7,28 +10,23 @@ const footerLinks = {
     { label: "Leaderboard", href: "/leaderboard" },
   ],
   resources: [
-    { label: "Documentation", href: "https://soroban.stellar.org", external: true },
-    { label: "Stellar Network", href: "https://stellar.org", external: true },
+    { label: "Project Docs", href: `${REPO_URL}/tree/testnet-implementation/docs`, external: true },
+    { label: "Deployment Manifest", href: `${REPO_URL}/tree/testnet-implementation/deployments`, external: true },
+    { label: "Stellar Testnet Explorer", href: "https://stellar.expert/explorer/testnet", external: true },
     { label: "Soroban Docs", href: "https://soroban.stellar.org/docs", external: true },
     {
       label: "License (Apache-2.0)",
-      href: "https://github.com/Alaka-ibr/AutoMint/blob/main/LICENSE",
-      external: true,
-    },
-    {
-      label: "Privacy Policy",
-      href: "https://github.com/Ada-Girly881/AutoMint/blob/testnet-implementation/frontend/docs/PRIVACY.md",
+      href: `${REPO_URL}/blob/testnet-implementation/LICENSE`,
       external: true,
     },
   ],
   community: [
     {
       label: "GitHub",
-      href: "https://github.com/Ada-Girly881/AutoMint",
+      href: REPO_URL,
       external: true,
       icon: Github,
     },
-    { label: "Discord", href: "#", external: true },
   ],
 };
 
@@ -109,6 +107,8 @@ export default function Footer() {
             <span className="mx-1 text-muted" aria-hidden="true">
               &middot;
             </span>
+            <span>Network: {NETWORK}</span>
+            <span aria-hidden="true">+</span>
             <span>React</span>
             <span aria-hidden="true">+</span>
             <span>Next.js</span>
