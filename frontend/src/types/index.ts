@@ -90,12 +90,14 @@ export function tierFromIndex(index: number): BotTier {
   return TIER_ORDER[Math.min(index, TIER_ORDER.length - 1)] ?? "Basic";
 }
 
+
 export function formatPoints(points: bigint): string {
   // `Intl` formats a BigInt directly. Going through `Number` first would
   // round away every digit past 2^53, so a large points balance would render
   // a value the contract never held.
   return points.toLocaleString("en-US");
 }
+
 
 export const XLM_DECIMALS = 7;
 export const STROOPS_PER_XLM = 10_000_000n;

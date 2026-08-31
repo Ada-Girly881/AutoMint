@@ -255,7 +255,7 @@ describe("Dashboard Integration — ClaimButton", () => {
   });
 
   it("shows pending points and an enabled Claim Rewards button when points > 0", () => {
-    render(<ClaimButton pendingPoints={150} onClaim={mockClaim} isClaiming={false} />);
+    render(<ClaimButton pendingPoints={BigInt(150)} onClaim={mockClaim} isClaiming={false} />);
     expect(screen.getByText("150")).toBeInTheDocument();
     const btn = screen.getByRole("button", { name: /Claim Rewards/i });
     expect(btn).toBeInTheDocument();
@@ -263,25 +263,25 @@ describe("Dashboard Integration — ClaimButton", () => {
   });
 
   it("disables the button when pending points are 0", () => {
-    render(<ClaimButton pendingPoints={0} onClaim={mockClaim} isClaiming={false} />);
+    render(<ClaimButton pendingPoints={BigInt(0)} onClaim={mockClaim} isClaiming={false} />);
     const btn = screen.getByRole("button", { name: /Claim Rewards/i });
     expect(btn).toBeDisabled();
   });
 
   it('shows "Claiming…" and disables button while isClaiming is true', () => {
-    render(<ClaimButton pendingPoints={200} onClaim={mockClaim} isClaiming={true} />);
+    render(<ClaimButton pendingPoints={BigInt(200)} onClaim={mockClaim} isClaiming={true} />);
     expect(screen.getByText(/Claiming/i)).toBeInTheDocument();
     expect(screen.getByRole("button")).toBeDisabled();
   });
 
   it("fires onClaim when the button is clicked", async () => {
-    render(<ClaimButton pendingPoints={300} onClaim={mockClaim} isClaiming={false} />);
+    render(<ClaimButton pendingPoints={BigInt(300)} onClaim={mockClaim} isClaiming={false} />);
     await userEvent.click(screen.getByRole("button", { name: /Claim Rewards/i }));
     expect(mockClaim).toHaveBeenCalledTimes(1);
   });
 
   it("does not fire onClaim when clicking a disabled button", async () => {
-    render(<ClaimButton pendingPoints={0} onClaim={mockClaim} isClaiming={false} />);
+    render(<ClaimButton pendingPoints={BigInt(0)} onClaim={mockClaim} isClaiming={false} />);
     await userEvent.click(screen.getByRole("button"));
     expect(mockClaim).not.toHaveBeenCalled();
   });
@@ -315,7 +315,7 @@ describe("Dashboard Integration — Full Flow Composition", () => {
 
         {/* Pending claim */}
         <ClaimButton
-          pendingPoints={150}
+          pendingPoints={BigInt(150)}
           onClaim={mockHooks.claimMutate}
           isClaiming={mockHooks.claimPending}
         />
@@ -346,14 +346,14 @@ describe("Dashboard Integration — Full Flow Composition", () => {
   });
 
   it("claim flow: clicking Claim Rewards calls the claim mutate function", async () => {
-    render(<ClaimButton pendingPoints={500} onClaim={mockHooks.claimMutate} isClaiming={false} />);
+    render(<ClaimButton pendingPoints={BigInt(500)} onClaim={mockHooks.claimMutate} isClaiming={false} />);
 
     await userEvent.click(screen.getByRole("button", { name: /Claim Rewards/i }));
     expect(mockHooks.claimMutate).toHaveBeenCalledTimes(1);
   });
 
   it("claim flow: shows loading state while claim is in progress", () => {
-    render(<ClaimButton pendingPoints={500} onClaim={mockHooks.claimMutate} isClaiming={true} />);
+    render(<ClaimButton pendingPoints={BigInt(500)} onClaim={mockHooks.claimMutate} isClaiming={true} />);
 
     const btn = screen.getByRole("button");
     expect(btn).toBeDisabled();
@@ -372,7 +372,7 @@ describe("Dashboard Integration — Full Flow Composition", () => {
     render(
       <div data-testid="dashboard">
         <PointsCounter points={0} rate={0} />
-        <ClaimButton pendingPoints={0} onClaim={mockClaim} isClaiming={false} />
+        <ClaimButton pendingPoints={BigInt(0)} onClaim={mockClaim} isClaiming={false} />
         {/* No BotCards rendered */}
       </div>,
     );

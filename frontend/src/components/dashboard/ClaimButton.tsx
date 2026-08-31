@@ -3,16 +3,16 @@
 import { motion } from "framer-motion";
 import { Loader2, Coins } from "lucide-react";
 import clsx from "clsx";
+import { formatPoints } from "@/types";
 
 interface ClaimButtonProps {
-  pendingPoints: number | bigint;
+  pendingPoints: bigint;
   onClaim: () => void;
   isClaiming: boolean;
 }
 
 export default function ClaimButton({ pendingPoints, onClaim, isClaiming }: ClaimButtonProps) {
-  const points = typeof pendingPoints === "bigint" ? Number(pendingPoints) : pendingPoints;
-  const disabled = isClaiming || points <= 0;
+  const disabled = isClaiming || pendingPoints <= 0n;
 
   return (
     <motion.div
@@ -31,7 +31,7 @@ export default function ClaimButton({ pendingPoints, onClaim, isClaiming }: Clai
           aria-atomic="true"
           aria-labelledby="pending-points-label"
         >
-          {points.toLocaleString()}
+          {formatPoints(pendingPoints)}
         </span>
       </div>
 

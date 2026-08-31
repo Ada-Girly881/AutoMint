@@ -19,7 +19,7 @@ describe("ClaimButton", () => {
   });
 
   it("renders pending points with locale formatting", () => {
-    render(<ClaimButton pendingPoints={1500} onClaim={mockOnClaim} isClaiming={false} />);
+    render(<ClaimButton pendingPoints={BigInt(1500)} onClaim={mockOnClaim} isClaiming={false} />);
     expect(screen.getByText("1,500")).toBeInTheDocument();
     expect(screen.getByText("Pending Points")).toBeInTheDocument();
   });
@@ -30,7 +30,7 @@ describe("ClaimButton", () => {
   });
 
   it("renders enabled Claim Rewards button when points > 0 and not claiming", () => {
-    render(<ClaimButton pendingPoints={100} onClaim={mockOnClaim} isClaiming={false} />);
+    render(<ClaimButton pendingPoints={BigInt(100)} onClaim={mockOnClaim} isClaiming={false} />);
     const btn = screen.getByRole("button", { name: /Claim Rewards/i });
     expect(btn).toBeInTheDocument();
     expect(btn).toBeEnabled();
@@ -38,14 +38,14 @@ describe("ClaimButton", () => {
   });
 
   it("disables button when pending points are 0", () => {
-    render(<ClaimButton pendingPoints={0} onClaim={mockOnClaim} isClaiming={false} />);
+    render(<ClaimButton pendingPoints={BigInt(0)} onClaim={mockOnClaim} isClaiming={false} />);
     const btn = screen.getByRole("button", { name: /Claim Rewards/i });
     expect(btn).toBeDisabled();
     expect(btn).toHaveClass("cursor-not-allowed");
   });
 
   it("disables button and shows Claiming text when isClaiming is true", () => {
-    render(<ClaimButton pendingPoints={200} onClaim={mockOnClaim} isClaiming={true} />);
+    render(<ClaimButton pendingPoints={BigInt(200)} onClaim={mockOnClaim} isClaiming={true} />);
     const btn = screen.getByRole("button");
     expect(btn).toBeDisabled();
     expect(btn).toHaveAttribute("aria-busy", "true");
@@ -53,37 +53,37 @@ describe("ClaimButton", () => {
   });
 
   it("disables button when isClaiming is true even with positive points", () => {
-    render(<ClaimButton pendingPoints={500} onClaim={mockOnClaim} isClaiming={true} />);
+    render(<ClaimButton pendingPoints={BigInt(500)} onClaim={mockOnClaim} isClaiming={true} />);
     expect(screen.getByRole("button")).toBeDisabled();
   });
 
   it("calls onClaim when enabled button is clicked", async () => {
     const user = userEvent.setup();
-    render(<ClaimButton pendingPoints={300} onClaim={mockOnClaim} isClaiming={false} />);
+    render(<ClaimButton pendingPoints={BigInt(300)} onClaim={mockOnClaim} isClaiming={false} />);
     await user.click(screen.getByRole("button", { name: /Claim Rewards/i }));
     expect(mockOnClaim).toHaveBeenCalledTimes(1);
   });
 
   it("does not call onClaim when disabled button is clicked", async () => {
     const user = userEvent.setup();
-    render(<ClaimButton pendingPoints={0} onClaim={mockOnClaim} isClaiming={false} />);
+    render(<ClaimButton pendingPoints={BigInt(0)} onClaim={mockOnClaim} isClaiming={false} />);
     await user.click(screen.getByRole("button", { name: /Claim Rewards/i }));
     expect(mockOnClaim).not.toHaveBeenCalled();
   });
 
   it("handles negative points as disabled", () => {
-    render(<ClaimButton pendingPoints={-10} onClaim={mockOnClaim} isClaiming={false} />);
+    render(<ClaimButton pendingPoints={BigInt(-10)} onClaim={mockOnClaim} isClaiming={false} />);
     expect(screen.getByRole("button")).toBeDisabled();
   });
 
   it("displays points aria-live region", () => {
-    render(<ClaimButton pendingPoints={42} onClaim={mockOnClaim} isClaiming={false} />);
+    render(<ClaimButton pendingPoints={BigInt(42)} onClaim={mockOnClaim} isClaiming={false} />);
     const pointsEl = screen.getByText("42");
     expect(pointsEl).toHaveAttribute("aria-live", "polite");
   });
 
   it("renders Claim Rewards text when not claiming and Coins icon", () => {
-    render(<ClaimButton pendingPoints={50} onClaim={mockOnClaim} isClaiming={false} />);
+    render(<ClaimButton pendingPoints={BigInt(50)} onClaim={mockOnClaim} isClaiming={false} />);
     expect(screen.getByText("Claim Rewards")).toBeInTheDocument();
   });
 });
