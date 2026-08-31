@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useWalletStore } from "@/store/walletStore";
 import { getBotById } from "@/lib/contracts";
 import type { BotNFT } from "@/types";
+import { pollWhenVisible } from "@/lib/polling";
 
 export function useBotDetails(botId: bigint) {
   const publicKey = useWalletStore((s: { publicKey: string | null }) => s.publicKey);
@@ -10,9 +11,7 @@ export function useBotDetails(botId: bigint) {
     queryKey: ["bot", botId, publicKey],
     queryFn: () => (publicKey ? getBotById(publicKey, botId) : Promise.resolve(null)),
     enabled: !!publicKey && botId > BigInt(0),
-    refetchInterval: 30000,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchInterval: pollWhenVisible(),
   });
 }
 
@@ -29,8 +28,6 @@ export function useAllBotDetails(botIds: bigint[]) {
       return bots.filter((bot): bot is BotNFT => bot !== null);
     },
     enabled: !!publicKey && botIds.length > 0,
-    refetchInterval: 30000,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchInterval: pollWhenVisible(),
   });
 }
