@@ -31,8 +31,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="flex min-h-screen flex-col bg-bg font-sans text-text">
         <Providers>
           <ErrorBoundary>
+            {/* Skip link: first focusable element, visible on focus.
+                Allows keyboard users to bypass the header navigation
+                and jump directly to the main content area. */}
+            <a
+              href="#main-content"
+              className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-gold focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-bg focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2 focus:ring-offset-bg"
+            >
+              Skip to main content
+            </a>
             <Header />
-            <main className="flex-1">{children}</main>
+            <main id="main-content" className="flex-1" tabIndex={-1}>
+              {children}
+            </main>
             <Footer />
           </ErrorBoundary>
           <Toaster
