@@ -4,6 +4,7 @@ describe("parse helpers in contracts.ts", () => {
   describe("parseUserProfile", () => {
     it("should parse raw user profile data correctly with total_points or points", () => {
       const rawData = {
+        address: "GALICE",
         username: "alice",
         points: "150",
       };
@@ -11,21 +12,26 @@ describe("parse helpers in contracts.ts", () => {
       const result = parseUserProfile(rawData);
 
       expect(result).toEqual({
+        address: "GALICE",
         username: "alice",
         points: 150n,
       });
     });
 
     it("parses correctly with bigint points", () => {
-      const raw = { username: "alice", points: 100n };
+      const raw = { address: "GALICE", username: "alice", points: 100n };
       const parsed = parseUserProfile(raw);
-      expect(parsed).toEqual({ username: "alice", points: 100n });
+      expect(parsed).toEqual({ address: "GALICE", username: "alice", points: 100n });
     });
 
     it("parses correctly with number points", () => {
-      const raw = { username: "bob", points: 50 };
+      const raw = { address: "GBOB", username: "bob", points: 50 };
       const parsed = parseUserProfile(raw);
-      expect(parsed).toEqual({ username: "bob", points: 50n });
+      expect(parsed).toEqual({ address: "GBOB", username: "bob", points: 50n });
+
+      // A profile shape with no address still parses; the field is an empty
+      // string rather than undefined so consumers never branch on it.
+      expect(parseUserProfile({ username: "bob", points: 50 }).address).toBe("");
     });
   });
 

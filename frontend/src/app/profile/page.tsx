@@ -2,11 +2,11 @@
 
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { useWalletStore } from "@/store/walletStore";
+import { useWalletStore, selectPublicKey } from "@/store/walletStore";
 import { useProfile, useBots } from "@/hooks/useAccrual";
 
 export default function ProfilePage() {
-  const publicKey = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore(selectPublicKey);
   const {
     data: profile,
     isLoading: profileLoading,

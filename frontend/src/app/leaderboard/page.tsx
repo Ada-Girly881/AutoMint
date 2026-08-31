@@ -4,8 +4,8 @@ import { useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import { Trophy } from "lucide-react";
-import { useLeaderboard } from "@/hooks/useLeaderboard";
-import { useWalletStore } from "@/store/walletStore";
+import { useLeaderboard, useRank } from "@/hooks/useLeaderboard";
+import { useWalletStore, selectPublicKey } from "@/store/walletStore";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 
@@ -18,7 +18,10 @@ const LeaderboardTable = dynamic(
 
 export default function LeaderboardPage() {
   const { data: leaderboardData, isLoading, isError, error, refetch, isRefetching } = useLeaderboard();
-  const publicKey = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore(selectPublicKey);
+  // #506 — the table only holds the top 50; this is how everyone else finds
+  // out where they stand. Disabled while no wallet is connected.
+  const { data: currentUserRank } = useRank();
 
   // #202 — surface load failures the same way the rest of the app does
   // (sonner toast), in addition to the inline ErrorState component.
@@ -95,13 +98,9 @@ export default function LeaderboardPage() {
       {/* Populated table */}
       {!isLoading && !isError && leaderboardData && leaderboardData.length > 0 && (
         <LeaderboardTable
-          users={leaderboardData.map((user, index) => ({
-            rank: index + 1,
-            address: "", // UserProfile doesn't carry address; display username instead
-            username: user.username,
-            points: Number(user.points),
-          }))}
+          users={leaderboardData.map((user, index) => ({ ...user, rank: index + 1 }))}
           currentAddress={publicKey}
+          currentUserRank={currentUserRank ?? null}
         />
       )}
     </main>

@@ -21,7 +21,10 @@ import { toast } from 'sonner';
 
 // Mock dependencies
 jest.mock('@/lib/contracts');
-jest.mock('@/store/walletStore');
+jest.mock('@/store/walletStore', () => ({
+  ...jest.requireActual('@/store/walletStore'),
+  useWalletStore: jest.fn(),
+}));
 jest.mock('sonner');
 
 const mockBuyBot = buyBot as jest.MockedFunction<typeof buyBot>;

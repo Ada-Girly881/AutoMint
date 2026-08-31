@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { buyBot as buyBotTx, mintTierBot as mintTierBotTx, getActiveListings, getUserListings, listBot, cancelListing } from "@/lib/contracts";
-import { useWalletStore } from "@/store/walletStore";
+import { useWalletStore, selectPublicKey } from "@/store/walletStore";
 import type { Tier } from "@/types";
 
 export function useBuyBot() {
   const queryClient = useQueryClient();
-  const publicKey = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore(selectPublicKey);
 
   return useMutation({
     mutationFn: async (listingId: number) => {
@@ -27,7 +27,7 @@ export function useBuyBot() {
 
 export function useMintTierBot() {
   const queryClient = useQueryClient();
-  const publicKey = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore(selectPublicKey);
 
   return useMutation({
     mutationFn: async ({ tier, token }: { tier: Tier; token: string }) => {
@@ -58,7 +58,7 @@ export function useListings() {
 }
 
 export function useMyListings() {
-  const publicKey = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore(selectPublicKey);
 
   return useQuery({
     queryKey: ["myListings", publicKey],
@@ -74,7 +74,7 @@ export function useMyListings() {
 
 export function useListBot() {
   const queryClient = useQueryClient();
-  const publicKey = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore(selectPublicKey);
 
   return useMutation({
     mutationFn: async ({ botId, price }: { botId: bigint; price: bigint }) => {
@@ -95,7 +95,7 @@ export function useListBot() {
 
 export function useCancelListing() {
   const queryClient = useQueryClient();
-  const publicKey = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore(selectPublicKey);
 
   return useMutation({
     mutationFn: async (listingId: bigint) => {

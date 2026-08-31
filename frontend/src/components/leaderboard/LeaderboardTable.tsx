@@ -3,8 +3,21 @@
 import React from "react";
 import { motion } from "framer-motion";
 import clsx from "clsx";
+import { formatPoints, type UserProfile } from "@/types";
+import type { UserRank } from "@/lib/contracts";
 
-export interface LeaderboardUser {
+/**
+ * A leaderboard row: exactly the profile the registry returns, plus the
+ * 1-based position it occupies.
+ *
+ * Deliberately built on `UserProfile` rather than restating its fields.
+ * The previous hand-written shape declared `points: number`, which forced
+ * the page to call `Number(profile.points)` on a `u64` and silently lose
+ * precision past 2^53, and it made `username` optional and `address`
+ * nullable even though the contract always supplies both.
+ */
+export interface LeaderboardUser extends UserProfile {
+  /** 1-based position in the ranking. */
   rank: number;
   address: string;
   username?: string;
@@ -15,6 +28,13 @@ export interface LeaderboardUser {
 export interface LeaderboardTableProps {
   users: LeaderboardUser[];
   currentAddress?: string | null;
+  /**
+   * The connected user's own standing. Pinned to the bottom of the table
+   * when they fall outside the visible rows, so a user ranked #312 still
+   * sees where they are. Omitted (or `null`) for a disconnected visitor,
+   * and ignored when the user already has a row above.
+   */
+  currentUserRank?: UserRank | null;
 }
 
 function truncateAddress(address: string): string {
@@ -94,6 +114,11 @@ function LeaderboardCard({
 }
 
 function LeaderboardTableComponent({ users, currentAddress }: LeaderboardTableProps) {
+function LeaderboardTableComponent({
+  users,
+  currentAddress,
+  currentUserRank,
+}: LeaderboardTableProps) {
   if (!users || users.length === 0) {
     return (
       <div data-testid="empty-leaderboard" className="text-muted text-sm text-center py-10">
@@ -103,6 +128,18 @@ function LeaderboardTableComponent({ users, currentAddress }: LeaderboardTablePr
   }
 
   const normalizedCurrentAddress = currentAddress?.toLowerCase() ?? null;
+
+  // The pinned row exists to tell a user something the table above cannot.
+  // Drop it when there is no connected wallet, when the contract had no
+  // standing to report, and when the user already occupies a visible row —
+  // a top-50 user gets the highlight, not a duplicate of themselves.
+  const isAlreadyVisible =
+    normalizedCurrentAddress !== null &&
+    users.some((user) => user.address.toLowerCase() === normalizedCurrentAddress);
+  const pinnedRank =
+    normalizedCurrentAddress !== null && currentUserRank && !isAlreadyVisible
+      ? currentUserRank
+      : null;
 
   return (
     <div className="w-full">
@@ -477,6 +514,80 @@ function LeaderboardTableComponent({ users, currentAddress }: LeaderboardTablePr
           </tbody>
         </table>
       </div>
+                  </div>
+                </td>
+
+                {/* Points — formatted straight from the bigint the contract
+                    returned; never narrowed to a JS number. */}
+                <td className="px-2 py-3 text-right font-semibold text-text sm:px-4">
+                  {formatPoints(user.points)}
+                </td>
+
+                {/* Truncated address */}
+                <td className="px-2 py-3 font-mono text-xs text-muted sm:px-4">
+                  {truncateAddress(user.address)}
+                </td>
+              </motion.tr>
+            );
+          })}
+        </tbody>
+
+        {pinnedRank && (
+          <tfoot>
+            <tr
+              data-testid="current-user-rank-row"
+              aria-current="true"
+              className="sticky bottom-0 border-t-2 border-gold/40 bg-card shadow-[0_-4px_12px_rgba(0,0,0,0.35)]"
+            >
+              {/* Rank — an unranked user is told so in words rather than
+                  being shown a sentinel number. */}
+              <td className="px-2 py-3 font-bold sm:px-4">
+                {pinnedRank.rank === null ? (
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+                    Unranked
+                  </span>
+                ) : (
+                  <span className="text-gold">
+                    <span aria-hidden="true">#{pinnedRank.rank}</span>
+                    <span className="sr-only">Your rank {pinnedRank.rank}</span>
+                  </span>
+                )}
+              </td>
+
+              <td className="px-2 py-3 sm:px-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-gold">
+                    {pinnedRank.username || "Your position"}
+                  </span>
+                  <span className="rounded-full bg-gold/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold">
+                    You
+                  </span>
+                  {pinnedRank.rank === null ? (
+                    <span className="text-xs text-muted">
+                      Claim points to enter the rankings
+                    </span>
+                  ) : (
+                    pinnedRank.pointsToNextRank !== null && (
+                      <span className="text-xs text-muted">
+                        {formatPoints(pinnedRank.pointsToNextRank)} points to reach #
+                        {pinnedRank.rank - 1}
+                      </span>
+                    )
+                  )}
+                </div>
+              </td>
+
+              <td className="px-2 py-3 text-right font-semibold text-text sm:px-4">
+                {formatPoints(pinnedRank.points)}
+              </td>
+
+              <td className="px-2 py-3 font-mono text-xs text-muted sm:px-4">
+                {truncateAddress(pinnedRank.address)}
+              </td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
     </div>
   );
 }
