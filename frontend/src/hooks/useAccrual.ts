@@ -11,7 +11,7 @@ import {
   getAmtBalance,
   claimPoints,
 } from "@/lib/contracts";
-import { useWalletStore } from "@/store/walletStore";
+import { useWalletStore, selectPublicKey } from "@/store/walletStore";
 import { useState, useEffect } from "react";
 import type { AccrualState, UserProfile } from "@/types";
 
@@ -22,9 +22,7 @@ const POLL_INTERVAL = 30000; // Poll every 30 seconds
 
 export function useRegister() {
   const queryClient = useQueryClient();
-  const publicKey = useWalletStore(
-    (s: { publicKey: string | null }) => s.publicKey,
-  );
+  const publicKey = useWalletStore(selectPublicKey);
 
   return useMutation({
     mutationFn: async (username: string) => {
@@ -69,7 +67,7 @@ export function useRegister() {
 
 /** Whether the connected wallet address is registered in the registry contract. */
 export function useRegistered() {
-  const publicKey = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore(selectPublicKey);
 
   return useQuery<boolean>({
     queryKey: ["registered", publicKey],
@@ -86,7 +84,7 @@ export function useRegistered() {
 
 /** Registry profile (username, points) for the connected wallet address. */
 export function useProfile() {
-  const publicKey = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore(selectPublicKey);
 
   return useQuery<UserProfile | null>({
     queryKey: ["profile", publicKey],
@@ -103,7 +101,7 @@ export function useProfile() {
 
 /** Bot IDs owned by the connected wallet address, from the bot_nft contract. */
 export function useBots() {
-  const publicKey = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore(selectPublicKey);
 
   return useQuery<bigint[]>({
     queryKey: ["bots", publicKey],
@@ -119,7 +117,7 @@ export function useBots() {
 
 /** Accrual state (last claim timestamp, cumulative claimed points) for the connected wallet address. */
 export function useAccrualState() {
-  const publicKey = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore(selectPublicKey);
 
   return useQuery<AccrualState | null>({
     queryKey: ["accrualState", publicKey],
@@ -136,7 +134,7 @@ export function useAccrualState() {
 
 /** AMT token balance for the connected wallet address, from the token contract. */
 export function useAmtBalance() {
-  const publicKey = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore(selectPublicKey);
 
   return useQuery<bigint>({
     queryKey: ["amtBalance", publicKey],
@@ -154,7 +152,7 @@ export function useAmtBalance() {
 /** Claims accrued points (converting to AMT where the threshold is met). */
 export function useClaim() {
   const queryClient = useQueryClient();
-  const publicKey = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore(selectPublicKey);
 
   return useMutation({
     mutationFn: async () => {

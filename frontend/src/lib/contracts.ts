@@ -56,6 +56,11 @@ async function buildTxXdr(
 /**
  * Parse a raw scVal map from the registry contract into a typed UserProfile.
  * The on-chain struct exposes `total_points`; older shapes used `points`.
+ *
+ * `address` is carried through so callers can tell whose profile a row is:
+ * the leaderboard needs it to render the owner and to match the connected
+ * wallet against a row. `scValToNative` renders a Soroban `Address` as its
+ * strkey string, so no further decoding is required.
  */
 export function parseUserProfile(
   rawData: Record<string, unknown>
@@ -63,6 +68,7 @@ export function parseUserProfile(
   const raw = rawData.total_points ?? rawData.points;
   const points = typeof raw === "bigint" ? raw : BigInt(String(raw ?? 0));
   return {
+    address: String(rawData.address ?? ""),
     username: String(rawData.username ?? ""),
     points,
   };
@@ -180,6 +186,106 @@ export async function getLeaderboard(
   );
   if (!Array.isArray(raw)) return [];
   return raw.map((entry: Record<string, unknown>) => parseUserProfile(entry));
+}
+
+/**
+ * The registry's `get_rank` returns `u32::MAX` for a user who sits below the
+ * ranked cutoff. Treated as "unranked", never as a position.
+ */
+export const UNRANKED_SENTINEL = 4_294_967_295;
+
+/**
+ * How many leaderboard rows `getUserRank` scans to place a user itself.
+ * Anyone inside this window is ranked without a second contract call, and
+ * the row directly above them supplies the "points to next position" gap.
+ */
+const RANK_WINDOW = 500;
+
+/** Where a single user stands on the leaderboard. */
+export interface UserRank {
+  address: string;
+  username: string;
+  /** 1-based position, or `null` when the user holds no ranked position. */
+  rank: number | null;
+  points: bigint;
+  /**
+   * Points needed to draw level with the position immediately above.
+   * `null` at rank 1, and whenever the neighbour above is not known.
+   */
+  pointsToNextRank: bigint | null;
+}
+
+/**
+ * Ask the registry directly where a user stands (AM-052's `get_rank`).
+ *
+ * Returns `null` — never throws — when the user is unranked, when they are
+ * not registered, or when the deployed registry predates `get_rank`. The
+ * caller falls back to deriving the rank from the leaderboard ordering,
+ * which is the same ordering `get_rank` reports.
+ */
+async function getRegistryRank(
+  userAddress: string,
+  sourceAddress: string
+): Promise<number | null> {
+  try {
+    const raw = await simulateContractCall(
+      REGISTRY_CONTRACT_ID,
+      "get_rank",
+      [nativeToScVal(userAddress, { type: "address" })],
+      sourceAddress
+    );
+    const rank = Number(raw);
+    if (!Number.isInteger(rank) || rank <= 0 || rank >= UNRANKED_SENTINEL) {
+      return null;
+    }
+    return rank;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the connected user's own leaderboard standing.
+ *
+ * Returns `null` when there is nothing to show — an unregistered address
+ * has no profile and therefore no position to pin.
+ */
+export async function getUserRank(
+  userAddress: string,
+  sourceAddress?: string
+): Promise<UserRank | null> {
+  const source = sourceAddress ?? userAddress;
+  const board = await getLeaderboard(RANK_WINDOW, source);
+  const index = board.findIndex((entry) => entry.address === userAddress);
+  const self = index >= 0 ? board[index] : undefined;
+
+  if (self) {
+    const above = index > 0 ? board[index - 1] : undefined;
+    return {
+      address: self.address,
+      username: self.username,
+      rank: index + 1,
+      points: self.points,
+      pointsToNextRank: above ? above.points - self.points : null,
+    };
+  }
+
+  // Below the scanned window: the contract is the only source for the
+  // position, and the user's own profile for their points.
+  const [rank, profile] = await Promise.all([
+    getRegistryRank(userAddress, source),
+    getUserProfile(userAddress).catch(() => null),
+  ]);
+
+  if (!profile) return null;
+
+  return {
+    address: profile.address || userAddress,
+    username: profile.username,
+    rank,
+    points: profile.points,
+    pointsToNextRank: null,
+  };
 }
 
 /**
