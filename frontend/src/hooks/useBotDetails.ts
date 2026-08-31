@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { useWalletStore } from "@/store/walletStore";
+import { useWalletStore, selectPublicKey } from "@/store/walletStore";
 import { getBotById } from "@/lib/contracts";
 import type { BotNFT } from "@/types";
 
 export function useBotDetails(botId: bigint) {
-  const publicKey = useWalletStore((s: { publicKey: string | null }) => s.publicKey);
+  const publicKey = useWalletStore(selectPublicKey);
 
   return useQuery<BotNFT | null>({
     queryKey: ["bot", botId, publicKey],
@@ -17,7 +17,7 @@ export function useBotDetails(botId: bigint) {
 }
 
 export function useAllBotDetails(botIds: bigint[]) {
-  const publicKey = useWalletStore((s: { publicKey: string | null }) => s.publicKey);
+  const publicKey = useWalletStore(selectPublicKey);
 
   return useQuery<BotNFT[]>({
     queryKey: ["bots", "details", publicKey, botIds],

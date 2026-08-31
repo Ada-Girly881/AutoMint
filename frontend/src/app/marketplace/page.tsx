@@ -2,13 +2,13 @@
 
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { useWalletStore } from "@/store/walletStore";
+import { useWalletStore, selectPublicKey } from "@/store/walletStore";
 import { useListings } from "@/hooks/useMarketplace";
 import BotListingCard from "@/components/marketplace/BotListingCard";
 import { toast } from "sonner";
 
 export default function MarketplacePage() {
-  const publicKey = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore(selectPublicKey);
   const { data: listings, isLoading, isError, error, refetch, isRefetching } = useListings();
 
   if (isLoading) {

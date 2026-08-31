@@ -24,6 +24,7 @@ jest.mock('next/link', () => {
 
 // Mock wallet store and hooks
 jest.mock('@/store/walletStore', () => ({
+  ...jest.requireActual('@/store/walletStore'),
   useWalletStore: (selector: any) => selector({ status: 'disconnected', publicKey: null }),
 }));
 

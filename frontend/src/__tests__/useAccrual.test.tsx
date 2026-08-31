@@ -26,7 +26,10 @@ import type { UserProfile, AccrualState } from '@/types';
 
 // Mock dependencies
 jest.mock('@/lib/contracts');
-jest.mock('@/store/walletStore');
+jest.mock('@/store/walletStore', () => ({
+  ...jest.requireActual('@/store/walletStore'),
+  useWalletStore: jest.fn(),
+}));
 jest.mock('sonner');
 
 const mockRegisterUser = registerUser as jest.MockedFunction<typeof registerUser>;

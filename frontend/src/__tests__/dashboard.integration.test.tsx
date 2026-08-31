@@ -31,6 +31,7 @@ const mockWalletStore = {
 };
 
 jest.mock("@/store/walletStore", () => ({
+  ...jest.requireActual("@/store/walletStore"),
   useWalletStore: (selector: (s: typeof mockWalletStore) => unknown) => selector(mockWalletStore),
 }));
 

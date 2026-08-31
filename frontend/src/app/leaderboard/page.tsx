@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import { Trophy } from "lucide-react";
 import { useLeaderboard } from "@/hooks/useLeaderboard";
-import { useWalletStore } from "@/store/walletStore";
+import { useWalletStore, selectPublicKey } from "@/store/walletStore";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 
@@ -18,7 +18,7 @@ const LeaderboardTable = dynamic(
 
 export default function LeaderboardPage() {
   const { data: leaderboardData, isLoading, isError, error, refetch, isRefetching } = useLeaderboard();
-  const publicKey = useWalletStore((s) => s.publicKey);
+  const publicKey = useWalletStore(selectPublicKey);
 
   // #202 — surface load failures the same way the rest of the app does
   // (sonner toast), in addition to the inline ErrorState component.
