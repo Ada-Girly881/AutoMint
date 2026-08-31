@@ -1,0 +1,41 @@
+{
+  "extends": [
+    "next/core-web-vitals",
+    "prettier"
+  ],
+  "plugins": ["@typescript-eslint"],
+  "rules": {
+    "no-console": ["warn", { "allow": ["warn", "error"] }],
+    "no-unused-vars": "off",
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
+    ],
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "Identifier[name=/([a-zA-Z]Id$|_id$|_ID$)/][typeAnnotation.typeAnnotation.type='TSNumberKeyword']",
+        "message": "On-chain identifiers named *Id/*_id must be bigint, not number (precision loss above 2^53)."
+      },
+      {
+        "selector": "PropertyDefinition[key.name=/([a-zA-Z]Id$|_id$|_ID$)/][typeAnnotation.typeAnnotation.type='TSNumberKeyword']",
+        "message": "On-chain identifiers named *Id/*_id must be bigint, not number (precision loss above 2^53)."
+      },
+      {
+        "selector": "Property[key.name=/([a-zA-Z]Id$|_id$|_ID$)/][typeAnnotation.typeAnnotation.type='TSNumberKeyword']",
+        "message": "On-chain identifiers named *Id/*_id must be bigint, not number (precision loss above 2^53)."
+      },
+      {
+        "selector": "TSPropertySignature[key.name=/([a-zA-Z]Id$|_id$|_ID$)/][typeAnnotation.typeAnnotation.type='TSNumberKeyword']",
+        "message": "On-chain identifiers named *Id/*_id must be bigint, not number (precision loss above 2^53)."
+      }
+    ],
+    "react/self-closing-comp": "warn",
+    "react/jsx-curly-brace-presence": [
+      "warn",
+      { "props": "never", "children": "never" }
+    ],
+    "prefer-const": "error",
+    "eqeqeq": ["error", "always", { "null": "ignore" }]
+  }
+}
