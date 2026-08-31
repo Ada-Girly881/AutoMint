@@ -68,13 +68,52 @@ describe("app/providers.tsx (#241)", () => {
 
     expect(capturedClient).toBeDefined();
     const defaultQueryOptions = capturedClient.getDefaultOptions().queries;
-    expect(defaultQueryOptions.staleTime).toBe(5 * 60 * 1000);
-    expect(defaultQueryOptions.retry).toBe(3);
+    // staleTime is 0 globally so invalidation refetches at once (#496); each
+    // query declares its own longer window where it wants one.
+    expect(defaultQueryOptions.staleTime).toBe(0);
+    // retry is a predicate now, not a fixed count (#497).
+    expect(typeof defaultQueryOptions.retry).toBe("function");
     expect(defaultQueryOptions.refetchOnWindowFocus).toBe(false);
     expect(defaultQueryOptions.refetchOnReconnect).toBe(false);
 
     const defaultMutationOptions = capturedClient.getDefaultOptions().mutations;
-    expect(defaultMutationOptions.retry).toBe(0);
+    expect(typeof defaultMutationOptions.retry).toBe("function");
+  });
+
+  it("query retry predicate: retries a network blip, never a contract or rejection error (#497)", () => {
+    let capturedClient: any = null;
+    function Capture() {
+      capturedClient = useQueryClient();
+      return null;
+    }
+    render(
+      <Providers>
+        <Capture />
+      </Providers>
+    );
+    const retry = capturedClient.getDefaultOptions().queries.retry;
+    expect(retry(0, new Error("failed to fetch: soroban rpc timeout"))).toBe(true);
+    expect(retry(0, new Error("Error(Contract, #4): simulation failed"))).toBe(false);
+    expect(retry(0, new Error("User declined the transaction"))).toBe(false);
+    expect(retry(0, new Error("NotRegistered"))).toBe(false);
+    expect(retry(9, new Error("network error"))).toBe(false);
+  });
+
+  it("mutation retry predicate: at most one pre-signature retry, never post-submit (#497)", () => {
+    let capturedClient: any = null;
+    function Capture() {
+      capturedClient = useQueryClient();
+      return null;
+    }
+    render(
+      <Providers>
+        <Capture />
+      </Providers>
+    );
+    const retry = capturedClient.getDefaultOptions().mutations.retry;
+    expect(retry(0, new Error("fetch failed while reading account"))).toBe(true);
+    expect(retry(1, new Error("fetch failed while reading account"))).toBe(false);
+    expect(retry(0, new Error("network error after submit"))).toBe(false);
   });
 
   it("permits setting and retrieving query cache data via QueryClient", () => {
