@@ -219,3 +219,17 @@ export function stringToScVal(value: string): xdr.ScVal {
 export function boolToScVal(value: boolean): xdr.ScVal {
   return nativeToScVal(value, { type: "bool" });
 }
+
+/**
+ * Fetch the current ledger's close time from the RPC.
+ *
+ * Returns a Unix timestamp (seconds since epoch) representing when the most
+ * recent ledger was closed. Used to compute the client-clock offset so the
+ * interpolated accrual counter stays accurate even when the browser clock is
+ * skewed (#492).
+ */
+export async function getLedgerCloseTime(): Promise<number> {
+  const server = getServer();
+  const ledger = await withRetry(() => server.getLatestLedger());
+  return Number(ledger.closeTime);
+}
