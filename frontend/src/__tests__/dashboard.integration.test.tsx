@@ -13,7 +13,7 @@
  */
 
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // ---------------------------------------------------------------------------
@@ -397,11 +397,13 @@ describe("Dashboard Integration — Full Flow Composition", () => {
     expect(mockConnect).toHaveBeenCalledTimes(1);
   });
 
-  it("points counter updates when animated points change", () => {
+  it("points counter updates when animated points change", async () => {
     const { rerender } = render(<PointsCounter points={2501} rate={1} />);
     expect(screen.getByTestId("total-points")).toHaveTextContent("2,501");
 
     rerender(<PointsCounter points={2502} rate={1} />);
-    expect(screen.getByTestId("total-points")).toHaveTextContent("2,502");
+    await waitFor(() => {
+      expect(screen.getByTestId("total-points")).toHaveTextContent("2,502");
+    }, { timeout: 2000 });
   });
 });

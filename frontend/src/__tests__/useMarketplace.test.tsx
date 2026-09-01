@@ -65,12 +65,12 @@ describe('useMarketplace Hooks', () => {
       const { result } = renderHook(() => useBuyBot(), { wrapper });
 
       act(() => {
-        result.current.mutate(1);
+        result.current.mutate(1n);
       });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockBuyBot).toHaveBeenCalledWith(mockPublicKey, 1);
+      expect(mockBuyBot).toHaveBeenCalledWith(mockPublicKey, 1n);
       expect(toast.success).toHaveBeenCalledWith('Bot purchased successfully!');
     });
 
@@ -81,7 +81,7 @@ describe('useMarketplace Hooks', () => {
       const { result } = renderHook(() => useBuyBot(), { wrapper });
 
       act(() => {
-        result.current.mutate(1);
+        result.current.mutate(1n);
       });
 
       await waitFor(() => expect(result.current.isError).toBe(true));
@@ -98,7 +98,7 @@ describe('useMarketplace Hooks', () => {
       const { result } = renderHook(() => useBuyBot(), { wrapper });
 
       act(() => {
-        result.current.mutate(1);
+        result.current.mutate(1n);
       });
 
       await waitFor(() => expect(result.current.isError).toBe(true));

@@ -122,8 +122,7 @@ describe('Landing Page Integration', () => {
 
   it('renders CTA section with Get Started link', () => {
     render(<HomePage />);
-    expect(screen.getByText('Ready to')).toBeInTheDocument();
-    expect(screen.getByText('Mint')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Ready to Mint/i })).toBeInTheDocument();
     const ctaLinks = screen.getAllByRole('link', { name: /Get Started/i });
     expect(ctaLinks.length).toBeGreaterThan(0);
     expect(ctaLinks[0]).toHaveAttribute('href', '/dashboard');

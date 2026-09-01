@@ -11,7 +11,7 @@ const footerLinks = {
   ],
   resources: [
     { label: "Project Docs", href: `${REPO_URL}/tree/testnet-implementation/docs`, external: true },
-    { label: "Deployment Manifest", href: `${REPO_URL}/tree/testnet-implementation/deployments`, external: true },
+    { label: "Deployment Guide", href: `${REPO_URL}/blob/testnet-implementation/docs/DEPLOYMENT.md`, external: true },
     { label: "Stellar Testnet Explorer", href: "https://stellar.expert/explorer/testnet", external: true },
     { label: "Soroban Docs", href: "https://soroban.stellar.org/docs", external: true },
     {
