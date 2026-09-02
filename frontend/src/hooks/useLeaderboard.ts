@@ -36,7 +36,7 @@ export function useRank() {
     queryKey: ["rank", publicKey],
     queryFn: () => (publicKey ? getUserRank(publicKey) : Promise.resolve(null)),
     enabled: !!publicKey,
-    refetchInterval: LEADERBOARD_POLL_INTERVAL,
+    refetchInterval: pollWhenVisible(),
     staleTime: 15_000,
     gcTime: 120_000,
     retry: 3,

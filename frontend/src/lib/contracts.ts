@@ -14,6 +14,7 @@ import {
   ACCRUAL_CONTRACT_ID,
   BASE_FEE,
   STELLAR_NETWORK_PASSPHRASE,
+  ANONYMOUS_READ_SOURCE,
 } from "./constants";
 import { getServer, simulateContractCall, buildPreparedTx } from "./stellar";
 import { withRetry } from "./rpcRetry";
@@ -25,7 +26,9 @@ const toBigInt = (v: unknown): bigint =>
 /**
  * Resolve the source address used for read-only simulations that have no
  * natural per-user address. Simulations don't sign, so any loadable account
- * works; the connected wallet's public key is the sensible default.
+ * works; the connected wallet's public key is the sensible default. A
+ * configured {@link ANONYMOUS_READ_SOURCE} lets disconnected visitors still
+ * read public data (marketplace listings, leaderboard) before they connect.
  */
 function defaultSource(sourceAddress?: string): string {
   if (sourceAddress) return sourceAddress;
@@ -33,6 +36,7 @@ function defaultSource(sourceAddress?: string): string {
     const win = window as unknown as { selectedPublicKey?: string };
     if (win.selectedPublicKey) return win.selectedPublicKey;
   }
+  if (ANONYMOUS_READ_SOURCE) return ANONYMOUS_READ_SOURCE;
   throw new Error("No source address available for contract simulation");
 }
 
@@ -162,7 +166,7 @@ export async function listBot(
  * Buy a bot from the marketplace.
  * Transfers AMT tokens to seller and bot to buyer.
  */
-export async function buyBot(address: string, listingId: number): Promise<string> {
+export async function buyBot(address: string, listingId: bigint): Promise<string> {
   return buildTxXdr(
     MARKETPLACE_CONTRACT_ID,
     "buy_bot",

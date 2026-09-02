@@ -19,7 +19,7 @@ defaults:
 
 jobs:
   test:
-    name: Type-check and run Jest suite
+    name: Run Jest suite with enforced coverage
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,5 +33,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Jest suite
+      - name: Run Jest suite (coverage threshold enforced in jest.config.js — #536)
         run: npm run test:ci
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+          retention-days: 14
+          if-no-files-found: error

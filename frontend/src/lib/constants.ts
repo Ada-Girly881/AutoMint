@@ -20,6 +20,16 @@ export const STELLAR_NETWORK_PASSPHRASE = NETWORK_PASSPHRASE;
 /** Human-readable network label, e.g. "TESTNET". */
 export const NETWORK = process.env.NEXT_PUBLIC_NETWORK ?? "TESTNET";
 
+/**
+ * Public key used as the simulation source for read-only contract calls when
+ * no wallet is connected — an anonymous visitor browsing the marketplace or
+ * leaderboard still sees active listings and rankings. Must be a real, funded
+ * account on the configured network; it is never used to sign or submit a
+ * transaction.
+ */
+export const ANONYMOUS_READ_SOURCE =
+  process.env.NEXT_PUBLIC_READ_SOURCE_ACCOUNT ?? "";
+
 /** Horizon URL for account/transaction queries. */
 export const HORIZON_URL =
   process.env.NEXT_PUBLIC_HORIZON_URL ?? "https://horizon-testnet.stellar.org";

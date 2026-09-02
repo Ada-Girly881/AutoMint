@@ -11,7 +11,7 @@ export function useBuyBot() {
   const publicKey = useWalletStore(selectPublicKey);
 
   return useMutation({
-    mutationFn: async (listingId: number) => {
+    mutationFn: async (listingId: bigint) => {
       if (!publicKey) throw new Error("Wallet not connected");
       return buyBotTx(publicKey, listingId);
     },

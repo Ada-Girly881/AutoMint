@@ -40,10 +40,10 @@ describe("ListBotModal (#514, #528)", () => {
     jest.clearAllMocks();
   });
 
-  it("renders with a visible, programmatically associated label and help text", () => {
+  it("renders with a visible, programmatically associated label and help text", async () => {
     render(<ListBotModal bot={MOCK_BOT} isOpen={true} onClose={jest.fn()} />);
 
-    const label = screen.getByLabelText(/Listing Price/i);
+    const label = await screen.findByLabelText(/Listing Price/i);
     expect(label).toBeInTheDocument();
     expect(label).toHaveAttribute("type", "text");
     expect(label).toHaveAttribute("aria-required", "true");

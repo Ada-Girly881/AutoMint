@@ -9,6 +9,10 @@ frontend/out/
 frontend/.vercel/
 frontend/.env.local
 frontend/.env.*.local
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/
 
 # Stellar CLI keys (never commit private keys)
 .stellar/
