@@ -12,6 +12,7 @@ import {
 import { useAllBotDetails } from "@/hooks/useBotDetails";
 import { getPendingPoints } from "@/lib/contracts";
 import { useState, useEffect } from "react";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { PointsCounter } from "@/components/dashboard/PointsCounter";
 import ClaimButton from "@/components/dashboard/ClaimButton";
 import BotCard from "@/components/dashboard/BotCard";
@@ -21,6 +22,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { Wallet, Loader2, Bot } from "lucide-react";
 import clsx from "clsx";
 import type { BotNFT } from "@/types";
+import { useReduceMotion } from "@/hooks/useReduceMotion";
 
 export default function DashboardPage() {
   const { publicKey, isConnected, connect, isConnecting } = useWallet();
@@ -54,6 +56,7 @@ export default function DashboardPage() {
     isError: isAccrualError,
     error: accrualError,
     refetch: refetchAccrual,
+    isRefetching: isAccrualRefetching,
   } = useAccrualState();
 
   const {
@@ -64,14 +67,25 @@ export default function DashboardPage() {
     isRefetching: isBotsDetailsRefetching,
   } = useAllBotDetails(botIds || []);
 
-  const { data: amtBalance } = useAmtBalance();
+  const { data: amtBalance, isPending: isAmtBalancePending } = useAmtBalance();
   const claim = useClaim();
 
   const [pendingPoints, setPendingPoints] = useState<bigint>(BigInt(0));
 
+  const reduceMotion = useReduceMotion();
+
   const isAnyError = isRegError || isProfileError || isBotsError || isAccrualError || isBotsDetailsError;
   const activeError = regError || profileError || botsError || accrualError || botsDetailsError;
   const isRetrying = isRegRefetching || isProfileRefetching || isBotsRefetching || isBotsDetailsRefetching;
+
+  // Check if any query is loading
+  const isLoading =
+    isCheckingRegistration ||
+    isProfileRefetching ||
+    isBotsRefetching ||
+    isBotsDetailsRefetching ||
+    isAccrualRefetching ||
+    isAmtBalancePending;
 
   const handleRetryAll = () => {
     refetchReg();
@@ -148,18 +162,51 @@ export default function DashboardPage() {
     );
   }
 
-  // Loading state
-  if (isCheckingRegistration) {
+  // Loading state - show skeletons while queries are in flight
+  if (isLoading) {
     return (
       <div className="mx-auto max-w-7xl px-6 py-8">
-        <div className="flex min-h-[400px] items-center justify-center rounded-2xl border border-liner bg-card p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted" aria-hidden="true" />
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Left column */}
+          <div className="flex flex-col gap-6">
+            <Skeleton className="rounded-2xl border border-liner bg-card p-5" reducedMotion>
+              <Skeleton className="h-11 w-11 rounded-xl" reducedMotion />
+              <Skeleton className="flex flex-col gap-2 reducedMotion">
+                <Skeleton className="h-4 w-28" reducedMotion />
+                <Skeleton className="h-3 w-16" reducedMotion />
+              </Skeleton>
+            </Skeleton>
+
+            <Skeleton className="rounded-2xl border border-liner bg-card p-5 reducedMotion" reducedMotion>
+              <Skeleton className="h-7 w-48 reducedMotion" />
+            </Skeleton>
+
+            <Skeleton className="rounded-2xl border border-liner bg-card p-5 reducedMotion" reducedMotion>
+
+            <Skeleton className="rounded-2xl border border-liner bg-card p-5 reducedMotion" reducedMotion>
+              <Skeleton className="h-7 w-48 reducedMotion" />
+            </Skeleton>
+          </div>
+
+          {/* Right column */}
+          <div className="flex flex-col gap-6">
+            <Skeleton className="rounded-2xl border border-liner bg-card p-5 reducedMotion" reducedMotion>
+
+            <Skeleton className="rounded-2xl border border-liner bg-card p-5 reducedMotion" reducedMotion>
+
+            <Skeleton className="rounded-2xl border border-liner bg-card p-5 reducedMotion" reducedMotion>
+
+            <Skeleton className="rounded-2xl border border-liner bg-card p-5 reducedMotion" reducedMotion>
+              <Skeleton className="h-12 w-12 items-center justify-center rounded-xl bg-card-2 reducedMotion" />
+              <Skeleton className="mt-3 text-sm text-muted reducedMotion" />
+            </Skeleton>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Error state for registration or initial query failures (#513)
+  // Error state for registration or initial query failures
   if (isRegError) {
     return (
       <div className="mx-auto max-w-7xl px-6 py-8">
@@ -223,14 +270,14 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-6">
           {/* Points Counter */}
           <PointsCounter
-            points={Number(profile?.points || BigInt(0))}
-            rate={totalRate}
-            bots={bots || []}
-            amtBalance={amtBalance ?? BigInt(0)}
+            points={isLoading ? BigInt(0) : Number(profile?.points || BigInt(0))}
+            rate={isLoading ? 0 : totalRate}
+            bots={isLoading ? [] : bots || []}
+            amtBalance={isLoading ? BigInt(0) : amtBalance ?? BigInt(0)}
           />
 
           {/* Claim Button */}
-          {pendingPoints > BigInt(0) && (
+          {pendingPoints > BigInt(0) && !isLoading && (
             <ClaimButton
               pendingPoints={pendingPoints}
               onClaim={handleClaim}
@@ -246,7 +293,7 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-6">
           <div className="flex items-center justify-between">
             <h2 className="font-display text-lg font-semibold text-text">Your Bots</h2>
-            <span className="text-sm text-muted">{bots?.length || 0} owned</span>
+            <span className="text-sm text-muted">{isLoading ? loading... : bots?.length || 0} owned</span>
           </div>
 
           {isBotsError || isBotsDetailsError ? (
@@ -262,6 +309,15 @@ export default function DashboardPage() {
               compact
               data-testid="bots-error-state"
             />
+          ) : isLoading ? (
+            <Skeleton className="rounded-2xl border border-liner bg-card p-5 reducedMotion" reducedMotion>
+              <Skeleton className="h-11 w-11 rounded-xl" reducedMotion />
+              <Skeleton className="flex flex-col gap-2 reducedMotion">
+                <Skeleton className="h-4 w-28" reducedMotion />
+                <Skeleton className="h-3 w-16" reducedMotion />
+              </Skeleton>
+              <Skeleton className="h-6 w-16 rounded-full" reducedMotion />
+            </Skeleton>
           ) : bots && bots.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2">
               {bots.map((bot: BotNFT) => (

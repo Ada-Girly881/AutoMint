@@ -3,45 +3,26 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Wallet, LogOut, AlertTriangle, Loader2, Download } from "lucide-react";
+import { Menu, X, Wallet, LogOut, AlertTriangle, Loader2, Download, Copy } from "lucide-react";
 import clsx from "clsx";
 import { useWallet } from "@/hooks/useWallet";
+import { useFocusLock } from "@/hooks/useFocusLock";
+import { truncateAddress, fullAddressTitle, fullAddressAriaLabel, useCopyToClipboard } from "@/lib/truncateAddress";
 
 const navLinks = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Marketplace", href: "/marketplace" },
   { label: "Leaderboard", href: "/leaderboard" },
-];
-
-function truncateAddress(address: string): string {
-  if (address.length <= 10) return address;
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
+]
 
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
   const { publicKey, isConnected, networkMismatch, isConnecting, isNotInstalled, connect, disconnect } = useWallet();
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const [isAddressCopied, setIsAddressCopied] = useState(false);
 
-  // Close mobile menu on Escape
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMobileOpen(false);
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (mobileOpen) {
-      document.addEventListener("keydown", handleKeyDown);
-      // Prevent body scroll when mobile menu is open
-      document.body.style.overflow = "hidden";
-    }
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
-    };
-  }, [mobileOpen, handleKeyDown]);
+  useFocusLock(mobileMenuRef, () => setMobileOpen(false));
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -137,16 +118,26 @@ export default function Header() {
           {isConnected && publicKey ? (
             <div className="flex items-center gap-2 rounded-xl border border-liner bg-card-2 px-3 py-2">
               <Wallet className="h-4 w-4 text-green" aria-hidden="true" />
-              <span className="text-sm font-medium text-text">
+              <span
+                className="text-sm font-medium text-text"
+                title={fullAddressTitle(publicKey)}
+                aria-label={fullAddressAriaLabel(publicKey)}
+              >
                 {truncateAddress(publicKey)}
               </span>
               <button
-                onClick={disconnect}
-                className="ml-1 rounded-lg p-1 text-muted hover:text-text transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                aria-label="Disconnect wallet"
+                onClick={() => {
+                  useCopyToClipboard(publicKey).handleCopy();
+                  setIsAddressCopied(true);
+                  setTimeout(() => setIsAddressCopied(false), 2000);
+                }}
+                className="ml-2 rounded-lg p-1 text-xs text-gold hover:bg-gold/10 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                aria-label="Copy address"
+                title="Copy address"
               >
-                <LogOut className="h-3.5 w-3.5" />
+                <Copy className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
+              {isAddressCopied && <span className="ml-1 text-xs text-green">Copied!</span>}
             </div>
           ) : (
             <button
@@ -183,6 +174,7 @@ export default function Header() {
 
       {mobileOpen && (
         <div
+          ref={mobileMenuRef}
           className="border-t border-liner md:hidden"
           role="dialog"
           aria-label="Mobile navigation"

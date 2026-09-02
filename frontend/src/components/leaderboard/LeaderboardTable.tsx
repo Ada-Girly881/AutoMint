@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import clsx from "clsx";
 import { formatPoints, type UserProfile } from "@/types";
 import type { UserRank } from "@/lib/contracts";
+import { truncateAddress, fullAddressTitle, fullAddressAriaLabel, useCopyToClipboard } from "@/lib/truncateAddress";
 
 /**
  * A leaderboard row: exactly the profile the registry returns, plus the
@@ -35,11 +36,6 @@ export interface LeaderboardTableProps {
    * and ignored when the user already has a row above.
    */
   currentUserRank?: UserRank | null;
-}
-
-function truncateAddress(address: string): string {
-  if (!address || address.length <= 12) return address;
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 const RANK_ICON: Record<number, { icon: string; color: string; label: string }> = {
@@ -106,7 +102,12 @@ function LeaderboardCard({
       <div className="mt-2 flex items-center justify-between gap-2">
         <span className="font-semibold text-text">{user.points.toLocaleString()} pts</span>
         {user.address && (
-          <span className="font-mono text-xs text-muted">{truncateAddress(user.address)}</span>
+          <span className="font-mono text-xs text-muted"
+  title={fullAddressTitle(user.address)}
+  aria-label={fullAddressAriaLabel(user.address)}
+>
+  {truncateAddress(user.address)}
+</span>
         )}
       </div>
     </motion.div>
@@ -524,9 +525,12 @@ function LeaderboardTableComponent({ users, currentAddress }: LeaderboardTablePr
                 </td>
 
                 {/* Truncated address */}
-                <td className="px-2 py-3 font-mono text-xs text-muted sm:px-4">
-                  {truncateAddress(user.address)}
-                </td>
+<td className="px-2 py-3 font-mono text-xs text-muted sm:px-4"
+  title={fullAddressTitle(user.address)}
+  aria-label={fullAddressAriaLabel(user.address)}
+>
+                    {truncateAddress(user.address)}
+                  </td>
               </motion.tr>
             );
           })}
